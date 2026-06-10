@@ -1,0 +1,121 @@
+# Concord — CLI ↔ Docs alignment checks
+
+from src.common import read_file_safe, is_truthy
+from src.scanner import find_readme, find_cli_entry, extract_fenced_commands, get_cli_help_commands, filter_unique
+
+export func check_cli_docs(dir_path, kujo_bin) {
+	mut findings := []
+
+	readme_path := find_readme(dir_path)
+	if readme_path == "" {
+		findings = push(findings, {
+			"id": "cli-docs-no-readme",
+			"severity": "low",
+			"confidence": "high",
+			"category": "cli-docs-alignment",
+			"title": "No README found for CLI/docs comparison",
+			"summary": "Could not find a README file in the project.",
+			"source_artifact": "(none)",
+			"target_artifact": "(none)",
+			"expected": "A README file should exist with documented commands.",
+			"actual": "No README found.",
+			"suggested_fix": "Add a README.md with usage documentation.",
+			"human_review_required": false
+		})
+		return findings
+	}
+
+	readme_content := read_file_safe(readme_path)
+	entry_script := find_cli_entry(dir_path)
+
+	# Extract documented commands from README
+	readme_commands := extract_fenced_commands(readme_content)
+
+	# Get CLI help commands if entry exists
+	mut cli_commands := []
+	if entry_script != "" {
+		cli_commands = get_cli_help_commands(entry_script, kujo_bin)
+	}
+
+	# Check 1: Commands documented in README exist in CLI help
+	mut has_cli := len(cli_commands) > 0
+	mut has_readme_cmds := len(readme_commands) > 0
+	if has_cli == 1 {
+		if has_readme_cmds == 1 {
+			mut i := 0
+			while i < len(readme_commands) {
+				r_cmd := readme_commands[i]
+				# Try to find the command in CLI help
+				mut found := 0
+				mut j := 0
+				while j < len(cli_commands) {
+					if is_truthy(contains(r_cmd, cli_commands[j])) == 1 {
+						found = 1
+						break
+					}
+					j = j + 1
+				}
+				if found == 0 {
+					cmd_id := "cli-docs-mismatch-" + to_string(i)
+					findings = push(findings, {
+						"id": cmd_id,
+						"severity": "high",
+						"confidence": "medium",
+						"category": "cli-docs-alignment",
+						"title": "Documented command not found in CLI help",
+						"summary": "README documents a command that does not appear in CLI help output.",
+						"source_artifact": readme_path,
+						"target_artifact": entry_script,
+						"expected": "Commands in README should be discoverable in CLI help.",
+						"actual": "Command '" + r_cmd + "' was found in README but not in CLI help.",
+						"suggested_fix": "Update README to use current commands, or add missing CLI command.",
+						"human_review_required": true
+					})
+				}
+				i = i + 1
+			}
+		}
+	}
+
+	# Check 2: Check if README has any documented usage at all
+	if len(readme_commands) == 0 {
+		findings = push(findings, {
+			"id": "cli-docs-no-commands-documented",
+			"severity": "medium",
+			"confidence": "high",
+			"category": "cli-docs-alignment",
+			"title": "No commands documented in README",
+			"summary": "README exists but contains no recognizable command examples in fenced code blocks.",
+			"source_artifact": readme_path,
+			"target_artifact": "(none)",
+			"expected": "README should contain usage examples with commands.",
+			"actual": "No command examples found in README fenced code blocks.",
+			"suggested_fix": "Add command usage examples to README.",
+			"human_review_required": false
+		})
+	}
+
+	# Check 3: Check if CLI entry has help but no README reference
+	mut has_entry := entry_script != ""
+	mut no_cli_cmds := len(cli_commands) == 0
+	if has_entry == 1 {
+		if no_cli_cmds == 1 {
+			findings = push(findings, {
+				"id": "cli-docs-help-parse-failed",
+				"severity": "low",
+				"confidence": "medium",
+				"category": "cli-docs-alignment",
+				"title": "Could not parse CLI help output",
+				"summary": "The CLI entry point exists but help output could not be parsed for commands.",
+				"source_artifact": entry_script,
+				"target_artifact": "(none)",
+				"expected": "CLI help should be parseable for command names.",
+				"actual": "CLI help output could not be parsed.",
+				"suggested_fix": "Ensure CLI help output follows standard formatting conventions.",
+				"human_review_required": false
+			})
+		}
+	}
+
+	return findings
+}

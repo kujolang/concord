@@ -1,0 +1,123 @@
+# Concord — Example validity checks
+
+from src.common import read_file_safe, is_truthy
+from src.scanner import find_readme, find_example_files, extract_fenced_commands
+from src.scanner import find_cli_entry, get_cli_help_commands
+
+export func check_example_validity(dir_path, kujo_bin) {
+	mut findings := []
+
+	readme_path := find_readme(dir_path)
+	example_files := find_example_files(dir_path)
+	entry_script := find_cli_entry(dir_path)
+
+	# Check 1: Example files exist
+	if len(example_files) == 0 {
+		findings = push(findings, {
+			"id": "examples-no-examples-dir",
+			"severity": "low",
+			"confidence": "high",
+			"category": "example-validity",
+			"title": "No examples directory found",
+			"summary": "No examples/ directory found in the project.",
+			"source_artifact": "(none)",
+			"target_artifact": "(none)",
+			"expected": "An examples/ directory with example files should exist.",
+			"actual": "No examples directory.",
+			"suggested_fix": "Add an examples/ directory with usage examples.",
+			"human_review_required": false
+		})
+	}
+
+	# Check 2: Example commands reference real files
+	if readme_path != "" {
+		readme_content := read_file_safe(readme_path)
+		readme_commands := extract_fenced_commands(readme_content)
+
+		mut i := 0
+		while i < len(readme_commands) {
+			cmd := readme_commands[i]
+			# Check for file references in commands (paths after flags like --dir, --output, -o, etc.)
+			mut file_refs := regex_find_all(cmd, "(?:--dir|--output|-o|--file|-f|--config|-c)\\s+(\\S+)")
+			mut j := 0
+			while j < len(file_refs) {
+				ref := file_refs[j]
+				# Skip if it looks like a flag value rather than a path
+				mut is_flag := 0
+				if is_truthy(starts_with(ref, "-")) == 1 { is_flag = 1 }
+				if is_truthy(starts_with(ref, "--")) == 1 { is_flag = 1 }
+				if is_flag == 1 {
+					j = j + 1
+					continue
+				}
+				# Check if the referenced file/dir exists (relative to project root)
+				full_ref := join_path(dir_path, ref)
+				mut file_missing := 0
+				if is_truthy(file_exists(full_ref)) == 0 {
+					if is_truthy(path_is_dir(full_ref)) == 0 {
+						file_missing = 1
+					}
+				}
+				if file_missing == 1 {
+					findings = push(findings, {
+						"id": "examples-missing-file-" + to_string(i) + "-" + to_string(j),
+						"severity": "medium",
+						"confidence": "medium",
+						"category": "example-validity",
+						"title": "Example references non-existent path",
+						"summary": "Command example references '" + ref + "' which does not exist.",
+						"source_artifact": readme_path,
+						"target_artifact": ref,
+						"expected": "Example commands should reference files that exist.",
+						"actual": "'" + ref + "' not found.",
+						"suggested_fix": "Update the example to use correct paths or create the referenced file.",
+						"human_review_required": true
+					})
+				}
+				j = j + 1
+			}
+			i = i + 1
+		}
+	}
+
+	# Check 3: Verify example files are referenced in README
+	mut has_examples := len(example_files) > 0
+	if has_examples == 1 {
+		if readme_path != "" {
+			readme_content := read_file_safe(readme_path)
+			mut e := 0
+			while e < len(example_files) {
+				example_name := example_files[e]
+				# Extract just the filename for comparison
+				mut parts := split(example_name, "/")
+				mut base_name := parts[len(parts) - 1]
+				if contains(readme_content, base_name) == 0 {
+					# Only flag if it's a significant example file
+					mut is_important := 0
+					if is_truthy(ends_with(base_name, ".kujo")) == 1 { is_important = 1 }
+					if is_truthy(ends_with(base_name, ".yml")) == 1 { is_important = 1 }
+					if is_truthy(ends_with(base_name, ".json")) == 1 { is_important = 1 }
+					if is_important == 1 {
+						findings = push(findings, {
+							"id": "examples-orphan-" + to_string(e),
+							"severity": "low",
+							"confidence": "low",
+							"category": "example-validity",
+							"title": "Example file not referenced in README",
+							"summary": "Example file '" + base_name + "' exists but is not mentioned in README.",
+							"source_artifact": example_name,
+							"target_artifact": readme_path,
+							"expected": "Example files should be referenced in documentation.",
+							"actual": "No reference to '" + base_name + "' found in README.",
+							"suggested_fix": "Add a reference to the example in README or remove unused example.",
+							"human_review_required": false
+						})
+					}
+				}
+				e = e + 1
+			}
+		}
+	}
+
+	return findings
+}

@@ -1,0 +1,98 @@
+# Concord — Fix task card generation
+
+from src.common import severity_weight, concord_version
+
+export func generate_fix_tasks(findings) {
+	version := concord_version()
+	mut report := ""
+	report = report + "# Concord Fix Tasks\n\n"
+	report = report + "**Concord v" + version + "**\n\n"
+	report = report + "---\n\n"
+
+	if len(findings) == 0 {
+		report = report + "✅ No fix tasks needed. No drift findings detected.\n"
+		return report
+	}
+
+	# Sort findings by severity (high to low)
+	mut ordered := []
+	mut remaining := []
+	mut i := 0
+	while i < len(findings) {
+		remaining = push(remaining, findings[i])
+		i = i + 1
+	}
+
+	# Simple insertion sort by severity weight
+	mut j := 0
+	while j < len(remaining) {
+		f := remaining[j]
+		mut inserted := 0
+		mut k := 0
+		while k < len(ordered) {
+			if severity_weight(f["severity"]) > severity_weight(ordered[k]["severity"]) {
+				# Insert before k
+				mut new_ordered := []
+				mut x := 0
+				while x < k {
+					new_ordered = push(new_ordered, ordered[x])
+					x = x + 1
+				}
+				new_ordered = push(new_ordered, f)
+				mut y := k
+				while y < len(ordered) {
+					new_ordered = push(new_ordered, ordered[y])
+					y = y + 1
+				}
+				ordered = new_ordered
+				inserted = 1
+				break
+			}
+			k = k + 1
+		}
+		if inserted == 0 {
+			ordered = push(ordered, f)
+		}
+		j = j + 1
+	}
+
+	report = report + "## Action Required\n\n"
+	report = report + "The following tasks address drift detected by Concord. Review each task and apply fixes as appropriate.\n\n"
+
+	mut task_num := 1
+	mut idx := 0
+	while idx < len(ordered) {
+		f := ordered[idx]
+		sev_emoji := "🔵"
+		if f["severity"] == "critical" { sev_emoji = "🔴" }
+		if f["severity"] == "high" { sev_emoji = "🟠" }
+		if f["severity"] == "medium" { sev_emoji = "🟡" }
+
+		report = report + "### Task " + to_string(task_num) + ": " + sev_emoji + " " + f["title"] + "\n\n"
+		report = report + "| Field | Value |\n"
+		report = report + "|-------|-------|\n"
+		report = report + "| **Finding ID** | `" + f["id"] + "` |\n"
+		report = report + "| **Severity** | " + f["severity"] + " |\n"
+		report = report + "| **Confidence** | " + f["confidence"] + " |\n"
+		report = report + "| **Category** | " + f["category"] + " |\n"
+		report = report + "| **Human Review** | " + to_string(f["human_review_required"]) + " |\n\n"
+
+		report = report + "**Problem:** " + f["summary"] + "\n\n"
+		report = report + "**Affected Files:**\n"
+		report = report + "- `" + f["source_artifact"] + "`\n"
+		if f["target_artifact"] != "(none)" {
+			if f["target_artifact"] != "(multiple)" {
+				report = report + "- `" + f["target_artifact"] + "`\n"
+			}
+		}
+		report = report + "\n"
+		report = report + "**Suggested Fix:** " + f["suggested_fix"] + "\n\n"
+		report = report + "**Validation:** Run `concord scan` after applying the fix to verify drift is resolved.\n\n"
+		report = report + "---\n\n"
+
+		task_num = task_num + 1
+		idx = idx + 1
+	}
+
+	return report
+}

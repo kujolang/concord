@@ -1,0 +1,203 @@
+# Concord test suite.
+#
+# The built-in `test_group` framework cannot see file-level imports on the
+# current runtime, so this hand-rolled harness is used instead. It exercises the
+# same exported helper functions and command-reporting surfaces the CLI uses.
+
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version
+from src.scanner import is_kujo_project, find_readme, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field
+from src.checks.cli_docs import check_cli_docs
+from src.reporter import generate_markdown_report, generate_json_report
+from src.fix_tasks import generate_fix_tasks
+
+mut passed := 0
+mut failed := 0
+
+func check(cond, name) {
+	if cond == true {
+		passed = passed + 1
+	} else {
+		failed = failed + 1
+		print("  ✗ " + name)
+	}
+}
+
+func test_common() {
+	check(concord_version() == "0.1.0", "version constant exists")
+
+	mut argv1 := ["scan", "--format", "json"]
+	check(parse_flag(argv1, "--dir", ".") == ".", "parse_flag returns default for missing flag")
+
+	mut argv2 := ["scan", "--dir", "/tmp", "--format", "json"]
+	check(parse_flag(argv2, "--dir", ".") == "/tmp", "parse_flag returns value for present flag")
+
+	mut argv3 := ["scan", "--verbose"]
+	check(parse_flag(argv3, "--verbose", "false") == "true", "parse_flag returns true for boolean flag")
+
+	mut argv4 := ["scan", "--format", "json"]
+	check(parse_subcommand(argv4) == "scan", "parse_subcommand returns first non-flag arg")
+
+	mut argv5 := ["--format", "json"]
+	check(parse_subcommand(argv5) == "", "parse_subcommand returns empty for flag-first")
+
+	mut argv6 := ["scan", "--format", "json"]
+	mut shifted := shift_args(argv6)
+	check(len(shifted) == 2, "shift_args removes first element")
+	check(shifted[0] == "--format", "shift_args preserves first trailing arg")
+	check(shifted[1] == "json", "shift_args preserves second trailing arg")
+
+	check(severity_weight("critical") > severity_weight("high"), "severity_weight orders critical above high")
+	check(severity_weight("high") > severity_weight("medium"), "severity_weight orders high above medium")
+	check(severity_weight("medium") > severity_weight("low"), "severity_weight orders medium above low")
+	check(severity_weight("low") > severity_weight("none"), "severity_weight orders low above none")
+
+	mut findings1 := [
+		{"severity": "low", "title": "test1"},
+		{"severity": "high", "title": "test2"},
+		{"severity": "medium", "title": "test3"},
+	]
+	check(highest_severity(findings1) == "high", "highest_severity finds highest in list")
+
+	mut findings2 := []
+	check(highest_severity(findings2) == "none", "highest_severity returns none for empty")
+
+	check(trim_space("  hello  ") == "hello", "trim_space works")
+	check(to_lowercase("HELLO") == "hello", "to_lowercase works")
+}
+
+func test_scanner() {
+	check(is_kujo_project(".") == 1, "is_kujo_project detects kujo.toml")
+
+	mut readme := find_readme(".")
+	check(readme != "", "find_readme finds README.md")
+
+	mut text1 := "```bash\nkujo run concord.kujo scan\nkujo run concord.kujo help\n```"
+	mut cmds := extract_fenced_commands(text1)
+	check(len(cmds) >= 1, "extract_fenced_commands finds kujo commands")
+
+	mut text2 := "![Version](https://img.shields.io/badge/version-0.1.0-blue)"
+	check(extract_badge_version(text2) == "0.1.0", "extract_badge_version finds version in badge")
+
+	mut text3 := "name: \"concord\"\nversion: \"0.1.0\""
+	check(extract_yaml_field(text3, "name") == "concord", "extract_yaml_field extracts simple field")
+
+	mut text4 := "name = \"concord\"\nversion = \"0.1.0\""
+	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
+	check(extract_toml_field(text4, "version") == "0.1.0", "extract_toml_field extracts version value")
+}
+
+func test_checks() {
+	mut findings := check_cli_docs(".", "kujo")
+	mut has_false_missing_readme := 0
+	mut i := 0
+	while i < len(findings) {
+		if findings[i]["id"] == "cli-docs-no-readme" {
+			has_false_missing_readme = 1
+		}
+		i = i + 1
+	}
+	check(has_false_missing_readme == 0, "cli docs check does not falsely report missing README for this repo")
+
+	mut clean := []
+	check(verification_exit_code(clean) == 0, "verification_exit_code returns zero for clean results")
+
+	mut drift := [
+		{
+			"severity": "high",
+			"title": "Mismatch",
+		},
+	]
+	check(verification_exit_code(drift) == 3, "verification_exit_code returns three for findings")
+	check(scan_exit_code(drift) == 1, "scan_exit_code returns one for high-severity findings")
+
+	mut low_drift := [
+		{
+			"severity": "low",
+			"title": "Minor mismatch",
+		},
+	]
+	check(scan_exit_code(low_drift) == 0, "scan_exit_code returns zero for low-severity findings")
+}
+
+func test_reporter() {
+	mut findings := [
+		{
+			"id": "test-001",
+			"severity": "high",
+			"confidence": "high",
+			"category": "cli-docs-alignment",
+			"title": "Test finding",
+			"summary": "Test summary.",
+			"source_artifact": "test.kujo",
+			"target_artifact": "README.md",
+			"expected": "Expected behavior.",
+			"actual": "Actual behavior.",
+			"suggested_fix": "Fix it.",
+			"human_review_required": true,
+		},
+	]
+	mut report := generate_markdown_report(".", findings)
+	check(contains(report, "# Concord Drift Report") == 1, "generate_markdown_report has expected sections")
+	check(contains(report, "## Summary") == 1, "generate_markdown_report includes summary section")
+	check(contains(report, "## Findings") == 1, "generate_markdown_report includes findings section")
+	check(contains(report, "Test finding") == 1, "generate_markdown_report includes finding title")
+
+	mut empty_findings := []
+	mut empty_report := generate_markdown_report(".", empty_findings)
+	check(contains(empty_report, "No drift findings") == 1, "generate_markdown_report handles empty findings")
+
+	mut json_str := generate_json_report(".", findings)
+	check(contains(json_str, "\"tool\"") == 1, "generate_json_report includes tool key")
+	check(contains(json_str, "\"concord\"") == 1, "generate_json_report includes tool name")
+	check(contains(json_str, "\"findings\"") == 1, "generate_json_report includes findings key")
+}
+
+func test_fix_tasks() {
+	mut findings := [
+		{
+			"id": "test-001",
+			"severity": "high",
+			"confidence": "high",
+			"category": "cli-docs-alignment",
+			"title": "Test finding",
+			"summary": "Test summary.",
+			"source_artifact": "test.kujo",
+			"target_artifact": "README.md",
+			"expected": "Expected behavior.",
+			"actual": "Actual behavior.",
+			"suggested_fix": "Fix it.",
+			"human_review_required": true,
+		},
+	]
+	mut tasks := generate_fix_tasks(findings)
+	check(contains(tasks, "# Concord Fix Tasks") == 1, "generate_fix_tasks produces task cards")
+	check(contains(tasks, "Test finding") == 1, "generate_fix_tasks includes finding title")
+
+	mut empty_findings := []
+	mut empty_tasks := generate_fix_tasks(empty_findings)
+	check(contains(empty_tasks, "No fix tasks needed") == 1, "generate_fix_tasks handles empty")
+}
+
+test "Common utilities" {
+	test_common()
+}
+
+test "Scanner" {
+	test_scanner()
+}
+
+test "Checks" {
+	test_checks()
+}
+
+test "Reporter" {
+	test_reporter()
+}
+
+test "Fix Tasks" {
+	test_fix_tasks()
+}
+
+test "Summary" {
+	assert failed == 0
+}

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -z "${KUJO_RUNTIME_BIN:-}" ]]; then
+	echo "Set KUJO_RUNTIME_BIN to the Kujo runtime binary path." >&2
+	exit 2
+fi
+
+exec "$KUJO_RUNTIME_BIN" "$@"

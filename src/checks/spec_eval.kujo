@@ -1,0 +1,110 @@
+# Concord — Spec ↔ Eval alignment checks
+
+from src.common import read_file_safe, extract_version_from_text
+from src.scanner import find_spec_files, find_eval_files, extract_yaml_field
+
+export func check_spec_eval(dir_path) {
+	mut findings := []
+
+	spec_files := find_spec_files(dir_path)
+	eval_files := find_eval_files(dir_path)
+
+	# Check 1: Spec files exist
+	if len(spec_files) == 0 {
+		findings = push(findings, {
+			"id": "spec-eval-no-spec",
+			"severity": "low",
+			"confidence": "high",
+			"category": "spec-eval-alignment",
+			"title": "No Spec files found",
+			"summary": "No .spec.yml or .spec.yaml files found in project root.",
+			"source_artifact": "(none)",
+			"target_artifact": "(none)",
+			"expected": "A Spec file should exist for the project.",
+			"actual": "No spec files found.",
+			"suggested_fix": "Create a spec file using `spec init`.",
+			"human_review_required": false
+		})
+	}
+
+	# Check 2: Eval files exist
+	if len(eval_files) == 0 {
+		findings = push(findings, {
+			"id": "spec-eval-no-eval",
+			"severity": "low",
+			"confidence": "high",
+			"category": "spec-eval-alignment",
+			"title": "No Eval suite files found",
+			"summary": "No eval suite JSON files found in tests/ or eval_results/.",
+			"source_artifact": "(none)",
+			"target_artifact": "(none)",
+			"expected": "Eval suite files should exist for the project.",
+			"actual": "No eval files found.",
+			"suggested_fix": "Create eval suites using `eval init`.",
+			"human_review_required": false
+		})
+	}
+
+	# Check 3: Spec acceptance criteria vs eval checks
+	mut has_spec := len(spec_files) > 0
+	mut has_eval := len(eval_files) > 0
+	if has_spec == 1 {
+		if has_eval == 1 {
+			mut s := 0
+			while s < len(spec_files) {
+				spec_content := read_file_safe(spec_files[s])
+				# Extract acceptance criteria from spec
+				mut criteria_matches := regex_find_all(spec_content, "acceptance_criteria:")
+				mut has_criteria := len(criteria_matches) > 0
+
+				# Check each eval file for check names
+				mut e := 0
+				while e < len(eval_files) {
+					eval_content := read_file_safe(eval_files[e])
+					mut check_count := 0
+					# Count "name" fields that look like check names
+					mut name_matches := regex_find_all(eval_content, "\"name\":\\s*\"([^\"]+)\"")
+					check_count = len(name_matches)
+
+				if check_count == 0 {
+					findings = push(findings, {
+						"id": "spec-eval-empty-eval-" + to_string(e),
+						"severity": "medium",
+						"confidence": "medium",
+						"category": "spec-eval-alignment",
+						"title": "Eval file has no check definitions",
+						"summary": "Eval file exists but contains no check names.",
+						"source_artifact": spec_files[s],
+						"target_artifact": eval_files[e],
+						"expected": "Eval files should contain named checks.",
+						"actual": "No check names found in " + eval_files[e],
+						"suggested_fix": "Add check definitions to the eval suite.",
+						"human_review_required": false
+					})
+				}
+				e = e + 1
+			}
+
+			if has_criteria == 0 {
+				findings = push(findings, {
+					"id": "spec-eval-no-criteria",
+					"severity": "medium",
+					"confidence": "high",
+					"category": "spec-eval-alignment",
+					"title": "Spec has no acceptance criteria",
+					"summary": "Spec file exists but contains no acceptance_criteria section.",
+					"source_artifact": spec_files[s],
+					"target_artifact": "(none)",
+					"expected": "Spec files should include acceptance criteria.",
+					"actual": "No acceptance_criteria found in spec.",
+					"suggested_fix": "Add acceptance_criteria to the spec file.",
+					"human_review_required": false
+				})
+			}
+			s = s + 1
+		}
+		}
+	}
+
+	return findings
+}

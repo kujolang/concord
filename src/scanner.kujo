@@ -1,0 +1,352 @@
+# Concord — artifact scanner (file discovery and detection)
+
+from src.common import read_file_safe, file_has_extension, is_truthy, trim_space
+
+# --- Repository detection ---
+
+export func is_git_repo(dir_path) {
+	git_dir := join_path(dir_path, ".git")
+	if is_truthy(file_exists(git_dir)) == 0 {
+		return 0
+	}
+	if is_truthy(path_is_dir(git_dir)) == 0 {
+		return 0
+	}
+	return 1
+}
+
+export func is_kujo_project(dir_path) {
+	kujo_toml := join_path(dir_path, "kujo.toml")
+	return is_truthy(file_exists(kujo_toml))
+}
+
+# --- Artifact detection ---
+
+export func find_readme(dir_path) {
+	mut candidates := ["README.md", "readme.md", "README", "README.txt", "README.rst"]
+	mut i := 0
+	while i < len(candidates) {
+		p := join_path(dir_path, candidates[i])
+		if is_truthy(file_exists(p)) == 1 {
+			return p
+		}
+		i = i + 1
+	}
+	return ""
+}
+
+export func find_docs_files(dir_path) {
+	docs_dir := join_path(dir_path, "docs")
+	mut result := []
+	if is_truthy(path_is_dir(docs_dir)) == 0 {
+		return result
+	}
+	mut entries := list_dir(docs_dir)
+	mut i := 0
+	while i < len(entries) {
+		name := entries[i]
+		if file_has_extension(name, ".md") == 1 {
+			result = push(result, join_path(docs_dir, name))
+		}
+		i = i + 1
+	}
+	return result
+}
+
+export func find_spec_files(dir_path) {
+	mut result := []
+	mut entries := list_dir(dir_path)
+	mut i := 0
+	while i < len(entries) {
+		name := entries[i]
+		mut is_spec := 0
+		if file_has_extension(name, ".spec.yml") == 1 { is_spec = 1 }
+		if file_has_extension(name, ".spec.yaml") == 1 { is_spec = 1 }
+		if is_spec == 1 {
+			result = push(result, join_path(dir_path, name))
+		}
+		i = i + 1
+	}
+	return result
+}
+
+export func find_eval_files(dir_path) {
+	mut result := []
+	# Check for eval suite JSON files in tests/ or eval_results/
+	mut check_dirs := [join_path(dir_path, "tests"), join_path(dir_path, "eval_results"), join_path(dir_path, "examples")]
+	mut d := 0
+	while d < len(check_dirs) {
+		check_dir := check_dirs[d]
+		if is_truthy(path_is_dir(check_dir)) == 1 {
+			mut entries := list_dir(check_dir)
+			mut j := 0
+			while j < len(entries) {
+				name := entries[j]
+				if file_has_extension(name, ".json") == 1 {
+					# Try to detect eval suite files by content
+					full_path := join_path(check_dir, name)
+					content := read_file_safe(full_path)
+					mut is_eval := 0
+					if is_truthy(contains(content, "\"checks\"")) == 1 {
+						is_eval = 1
+					}
+					if is_truthy(contains(content, "\"suite\"")) == 1 {
+						is_eval = 1
+					}
+					if is_eval == 1 {
+						result = push(result, full_path)
+					}
+				}
+				j = j + 1
+			}
+		}
+		d = d + 1
+	}
+	return result
+}
+
+export func find_manifest_files(dir_path) {
+	mut result := []
+	# kennel.toml
+	kennel_toml := join_path(dir_path, "kennel.toml")
+	if is_truthy(file_exists(kennel_toml)) == 1 {
+		result = push(result, kennel_toml)
+	}
+	# kujo.toml
+	kujo_toml := join_path(dir_path, "kujo.toml")
+	if is_truthy(file_exists(kujo_toml)) == 1 {
+		result = push(result, kujo_toml)
+	}
+	# Cargo.toml (Rust projects)
+	cargo_toml := join_path(dir_path, "Cargo.toml")
+	if is_truthy(file_exists(cargo_toml)) == 1 {
+		result = push(result, cargo_toml)
+	}
+	# package.json (JS projects)
+	pkg_json := join_path(dir_path, "package.json")
+	if is_truthy(file_exists(pkg_json)) == 1 {
+		result = push(result, pkg_json)
+	}
+	return result
+}
+
+export func find_changelog(dir_path) {
+	mut candidates := ["CHANGELOG.md", "CHANGELOG", "CHANGES.md", "CHANGES", "HISTORY.md"]
+	mut i := 0
+	while i < len(candidates) {
+		p := join_path(dir_path, candidates[i])
+		if is_truthy(file_exists(p)) == 1 {
+			return p
+		}
+		i = i + 1
+	}
+	return ""
+}
+
+export func find_example_files(dir_path) {
+	mut result := []
+	examples_dir := join_path(dir_path, "examples")
+	if is_truthy(path_is_dir(examples_dir)) == 1 {
+		mut entries := list_dir(examples_dir)
+		mut i := 0
+		while i < len(entries) {
+			result = push(result, join_path(examples_dir, entries[i]))
+			i = i + 1
+		}
+	}
+	return result
+}
+
+export func find_cli_entry(dir_path) {
+	# Try to find the main CLI entry point
+	# Check kennel.toml for entry field first
+	kennel_toml := join_path(dir_path, "kennel.toml")
+	if is_truthy(file_exists(kennel_toml)) == 1 {
+		content := read_file_safe(kennel_toml)
+		# Extract entry from [kujo] section
+		mut matches := regex_find_all(content, "entry\\s*=\\s*\"([^\"]+)\"")
+		if len(matches) > 0 {
+			return join_path(dir_path, matches[0])
+		}
+	}
+	# Fall back to common patterns
+	mut candidates := ["main.kujo", "server.kujo", "cli.kujo", "dispatch.kujo", "scout.kujo", "watchdog.kujo"]
+	mut i := 0
+	while i < len(candidates) {
+		p := join_path(dir_path, candidates[i])
+		if is_truthy(file_exists(p)) == 1 {
+			return p
+		}
+		i = i + 1
+	}
+	return ""
+}
+
+# Check if a line starts with a known command prefix
+export func looks_like_command(line) {
+	mut s := trim_space(line)
+	if is_truthy(starts_with(s, "kujo ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "concord ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "cargo ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "spec ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "kennel ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "scout ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "git ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "bash ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "./")) == 1 { return 1 }
+	return 0
+}
+
+export func extract_fenced_commands(text) {
+	# Extract commands from fenced code blocks (```bash, ```sh, ```, etc.)
+	mut result := []
+	# Find all fenced code blocks
+	mut blocks := regex_find_all(text, "```[a-z]*\\n([\\s\\S]*?)```")
+	mut i := 0
+	while i < len(blocks) {
+		block := blocks[i]
+		# Split into lines and find command-like lines
+		mut lines := split(block, "\n")
+		mut j := 0
+		while j < len(lines) {
+			line := trim_space(lines[j])
+			# Look for lines that look like commands
+			if looks_like_command(line) == 1 {
+				result = push(result, line)
+			}
+			j = j + 1
+		}
+		i = i + 1
+	}
+	return result
+}
+
+export func extract_headings(text) {
+	# Extract markdown headings
+	return regex_find_all(text, "^#{1,6}\\s+(.+)$")
+}
+
+export func extract_badge_version(text) {
+	# Extract version from shield.io badges
+	mut matches := regex_find_all(text, "version-([0-9]+\\.[0-9]+\\.[0-9]+)")
+	if len(matches) > 0 {
+		mut badge := matches[0]
+		mut parts := split(badge, "version-")
+		if len(parts) > 1 {
+			return trim_space(parts[1])
+		}
+		return trim_space(badge)
+	}
+	# Try alternate badge format
+	matches = regex_find_all(text, "v([0-9]+\\.[0-9]+\\.[0-9]+)-blue")
+	if len(matches) > 0 {
+		mut badge := matches[0]
+		mut parts := split(badge, "v")
+		if len(parts) > 1 {
+			mut value := trim_space(parts[1])
+			mut value_parts := split(value, "-blue")
+			if len(value_parts) > 0 {
+				return trim_space(value_parts[0])
+			}
+			return value
+		}
+		return trim_space(badge)
+	}
+	return ""
+}
+
+# --- YAML/TOML simple extraction (regex-based, no parser) ---
+
+export func extract_yaml_field(text, field_name) {
+	# Very simple regex-based field extraction from YAML
+	# Pattern: field_name: "value" or field_name: value or field_name: 'value'
+	mut pattern := field_name + ":\\s*[\"']?([^\"'\\n]+)[\"']?"
+	mut matches := regex_find_all(text, pattern)
+	if len(matches) > 0 {
+		mut raw := trim_space(matches[0])
+		mut parts := split(raw, ":")
+		if len(parts) > 1 {
+			mut value := trim_space(parts[1])
+			mut quote_parts := split(value, "\"")
+			if len(quote_parts) > 1 {
+				return trim_space(quote_parts[1])
+			}
+			mut single_quote_parts := split(value, "'")
+			if len(single_quote_parts) > 1 {
+				return trim_space(single_quote_parts[1])
+			}
+			return value
+		}
+		return raw
+	}
+	return ""
+}
+
+export func extract_toml_field(text, field_name) {
+	# Very simple regex-based field extraction from TOML
+	# Pattern: field_name = "value" or field_name = 'value'
+	mut pattern := field_name + "\\s*=\\s*[\"']([^\"']+)[\"']"
+	mut matches := regex_find_all(text, pattern)
+	if len(matches) > 0 {
+		mut raw := trim_space(matches[0])
+		mut parts := split(raw, "=")
+		if len(parts) > 1 {
+			mut value := trim_space(parts[1])
+			mut quote_parts := split(value, "\"")
+			if len(quote_parts) > 1 {
+				return trim_space(quote_parts[1])
+			}
+			mut single_quote_parts := split(value, "'")
+			if len(single_quote_parts) > 1 {
+				return trim_space(single_quote_parts[1])
+			}
+			return value
+		}
+		return raw
+	}
+	return ""
+}
+
+# --- CLI help extraction ---
+
+export func get_cli_help_commands(entry_script, kujo_bin) {
+	# Extract commands from entry script source to avoid shelling out.
+	mut cmds := []
+	if entry_script == "" {
+		return cmds
+	}
+	if is_truthy(file_exists(entry_script)) == 0 {
+		return cmds
+	}
+
+	content := read_file_safe(entry_script)
+	mut matches := regex_find_all(content, "subcommand\\s*==\\s*\"([a-z][a-z0-9_-]+)\"")
+	mut i := 0
+	while i < len(matches) {
+		candidate := matches[i]
+		mut is_excluded := 0
+		if candidate == "help" { is_excluded = 1 }
+		if candidate == "version" { is_excluded = 1 }
+		if is_excluded == 0 {
+			cmds = push(cmds, candidate)
+		}
+		i = i + 1
+	}
+
+	return filter_unique(cmds)
+}
+
+export func filter_unique(items) {
+	mut seen := {}
+	mut result := []
+	mut i := 0
+	while i < len(items) {
+		item := items[i]
+		if has_key(seen, item) == 0 {
+			seen[item] = 1
+			result = push(result, item)
+		}
+		i = i + 1
+	}
+	return result
+}

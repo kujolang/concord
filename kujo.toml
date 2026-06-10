@@ -1,0 +1,10 @@
+# Concord kujo.toml — Kujo project configuration
+
+[project]
+name = "concord"
+version = "0.1.0"
+description = "Artifact drift and alignment checker for Kujo ecosystem projects."
+
+[kujo]
+minimum_version = "0.1.0"
+entry = "concord.kujo"

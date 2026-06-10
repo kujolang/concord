@@ -1,0 +1,8 @@
+# Absolute paths to repositories scanned by the continuous concord loop.
+# Lines beginning with # are ignored.
+/Users/robertdevore/2026/kujo-concord
+/Users/robertdevore/2026/patchbrief
+/Users/robertdevore/2026/shipcheck
+/Users/robertdevore/2026/kujo-scout
+/Users/robertdevore/2026/kujo-spec
+/Users/robertdevore/2026/kujo-eval
