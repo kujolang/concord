@@ -4,7 +4,7 @@
 # current runtime, so this hand-rolled harness is used instead. It exercises the
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
-from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token
 from src.scanner import is_kujo_project, find_readme, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field
 from src.checks.cli_docs import check_cli_docs
 from src.reporter import generate_markdown_report, generate_json_report
@@ -39,6 +39,9 @@ func test_common() {
 
 	mut argv5 := ["--format", "json"]
 	check(parse_subcommand(argv5) == "", "parse_subcommand returns empty for flag-first")
+
+	check(is_flag_token("--format") == 1, "is_flag_token detects option names")
+	check(is_flag_token("markdown") == 0, "is_flag_token ignores option values")
 
 	mut argv6 := ["scan", "--format", "json"]
 	mut shifted := shift_args(argv6)
