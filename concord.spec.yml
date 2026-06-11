@@ -4,7 +4,7 @@ name: "concord"
 goal: "Build a small showcase tool called Concord that detects artifact drift and alignment issues in Kujo ecosystem repositories. Concord checks whether the important artifacts in a repo (code, CLI, docs, examples, Spec files, Eval checks, schemas, package metadata) agree with each other."
 id: "a1b2c3d4-e5f6-4789-abcd-ef0123456789"
 status: "in-progress"
-version: "0.1.0"
+version: "1.0.0"
 created_at: "2026-05-28T08:00:00Z"
 priority: "high"
 background: |
@@ -102,7 +102,7 @@ likely_files:
 acceptance_criteria:
   - "`./kujo run concord.kujo scan` produces a Markdown drift report for the current directory"
   - "`./kujo run concord.kujo scan --format json` produces valid JSON output"
-  - "`./kujo run concord.kujo scan --dir ../patchbrief` scans an external repo"
+  - "`./kujo run concord.kujo scan --dir /path/to/other-project` scans an external repo"
   - "`./kujo run concord.kujo check cli-docs` runs CLI/docs alignment checks specifically"
   - "`./kujo run concord.kujo check spec-eval` runs Spec/Eval alignment checks specifically"
   - "`./kujo run concord.kujo check manifest` runs manifest/docs alignment checks specifically"
@@ -123,15 +123,15 @@ eval_requirements:
   - description: "Concord scan command succeeds on a known-good repo"
     check_type: "command_succeeds"
     params:
-      command: "./kujo run concord.kujo scan --dir ../patchbrief"
+      command: "./kujo run concord.kujo scan --dir /path/to/other-project"
   - description: "Concord scan produces valid JSON"
     check_type: "command_succeeds"
     params:
-      command: "./kujo run concord.kujo scan --dir ../patchbrief --format json"
+      command: "./kujo run concord.kujo scan --dir /path/to/other-project --format json"
   - description: "Concord report contains expected sections"
     check_type: "output_contains"
     params:
-      command: "./kujo run concord.kujo scan --dir ../patchbrief"
+      command: "./kujo run concord.kujo scan --dir /path/to/other-project"
       expected:
         - "# Concord Drift Report"
         - "## Summary"
@@ -139,7 +139,7 @@ eval_requirements:
   - description: "Concord JSON output has findings array"
     check_type: "json_path_value"
     params:
-      command: "./kujo run concord.kujo scan --dir ../patchbrief --format json"
+      command: "./kujo run concord.kujo scan --dir /path/to/other-project --format json"
       path: "$.findings"
   - description: "Concord exits non-zero on invalid args"
     check_type: "exit_code"

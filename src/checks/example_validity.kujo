@@ -42,6 +42,10 @@ export func check_example_validity(dir_path, kujo_bin) {
 			mut j := 0
 			while j < len(file_refs) {
 				ref := file_refs[j]
+				if is_truthy(starts_with(ref, "/path/to/")) == 1 {
+					j = j + 1
+					continue
+				}
 				# Skip if it looks like a flag value rather than a path
 				mut is_flag := 0
 				if is_truthy(starts_with(ref, "-")) == 1 { is_flag = 1 }

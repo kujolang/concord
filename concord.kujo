@@ -8,7 +8,7 @@
 #   ./kujo run concord.kujo version
 #   ./kujo run concord.kujo help
 
-VERSION := "0.1.0"
+VERSION := "1.0.0"
 
 from src.common import parse_flag, parse_subcommand, shift_args, highest_severity, is_truthy, verification_exit_code, scan_exit_code
 from src.scanner import is_git_repo, is_kujo_project
@@ -67,7 +67,7 @@ func print_help() {
 	print("")
 	print("Examples:")
 	print("  ./kujo run concord.kujo scan")
-	print("  ./kujo run concord.kujo scan --dir ../patchbrief --format json")
+	print("  ./kujo run concord.kujo scan --dir /path/to/other-project --format json")
 	print("  ./kujo run concord.kujo check cli-docs")
 	print("  ./kujo run concord.kujo tasks --dir ../my-project")
 }
@@ -86,6 +86,35 @@ func get_target_dir(argv) {
 func get_output_format(argv) {
 	format := parse_flag(argv, "--format", "markdown")
 	return format
+}
+
+func validate_args(subcommand, rest) {
+	mut i := 0
+	mut seen_category := 0
+	while i < len(rest) {
+		arg := rest[i]
+		if arg == "--dir" || arg == "--format" || arg == "--output" {
+			i = i + 1
+			if i < len(rest) && starts_with(rest[i], "-") == 0 {
+				i = i + 1
+			}
+			continue
+		}
+		if starts_with(arg, "-") == 1 {
+			print("Error: Unknown option '" + arg + "'")
+			print("Run './kujo run concord.kujo help' for usage information.")
+			return 0
+		}
+		if subcommand == "check" && seen_category == 0 {
+			seen_category = 1
+			i = i + 1
+			continue
+		}
+		print("Error: Unexpected argument '" + arg + "'")
+		print("Run './kujo run concord.kujo help' for usage information.")
+		return 0
+	}
+	return 1
 }
 
 func run_all_checks(dir_path, kujo_bin) {
@@ -289,11 +318,21 @@ func main() {
 	mut kujo_bin := "kujo"
 
 	if subcommand == "version" {
+		if len(rest) > 0 {
+			print("Error: Unexpected argument '" + rest[0] + "'")
+			print("Run './kujo run concord.kujo help' for usage information.")
+			exit(2)
+		}
 		print_version()
 		exit(0)
 	}
 
 	if subcommand == "help" {
+		if len(rest) > 0 {
+			print("Error: Unexpected argument '" + rest[0] + "'")
+			print("Run './kujo run concord.kujo help' for usage information.")
+			exit(2)
+		}
 		print_help()
 		exit(0)
 	}
@@ -311,6 +350,10 @@ func main() {
 	}
 	if is_truthy(path_is_dir(dir_path)) == 0 {
 		print("Error: Not a directory: " + dir_path)
+		exit(2)
+	}
+
+	if validate_args(subcommand, rest) == 0 {
 		exit(2)
 	}
 

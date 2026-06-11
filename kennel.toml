@@ -1,6 +1,6 @@
 [package]
 name = "concord"
-version = "0.1.0"
+version = "1.0.0"
 description = "Artifact drift and alignment checker for Kujo ecosystem projects. Dogfood showcase for the Kujo ecosystem."
 license = "MIT"
 authors = ["Kujolang <contact@kujolang.ai>"]
@@ -16,7 +16,7 @@ public_api = false
 notes = "MVP dogfood build. Not yet ready for production use."
 
 [kujo]
-minimum_version = "0.1.0"
+minimum_version = "1.0.0"
 entry = "concord.kujo"
 sources = ["src", "."]
 includes = ["README.md", "tests"]

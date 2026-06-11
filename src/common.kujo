@@ -89,7 +89,7 @@ export func json_string(obj) {
 }
 
 export func concord_version() {
-	return "0.1.0"
+	return "1.0.0"
 }
 
 export func verification_exit_code(findings) {
@@ -109,7 +109,7 @@ export func scan_exit_code(findings) {
 # --- Version helpers ---
 
 export func extract_version_from_text(text) {
-	# Try to find a version pattern like 0.1.0 or v0.1.0
+	# Try to find a version pattern like 1.0.0 or v1.0.0
 	mut matches := regex_find_all(text, "v?([0-9]+\\.[0-9]+\\.[0-9]+)")
 	if len(matches) > 0 {
 		return matches[0]

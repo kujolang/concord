@@ -23,7 +23,7 @@ func check(cond, name) {
 }
 
 func test_common() {
-	check(concord_version() == "0.1.0", "version constant exists")
+	check(concord_version() == "1.0.0", "version constant exists")
 
 	mut argv1 := ["scan", "--format", "json"]
 	check(parse_flag(argv1, "--dir", ".") == ".", "parse_flag returns default for missing flag")
@@ -75,15 +75,15 @@ func test_scanner() {
 	mut cmds := extract_fenced_commands(text1)
 	check(len(cmds) >= 1, "extract_fenced_commands finds kujo commands")
 
-	mut text2 := "![Version](https://img.shields.io/badge/version-0.1.0-blue)"
-	check(extract_badge_version(text2) == "0.1.0", "extract_badge_version finds version in badge")
+	mut text2 := "![Version](https://img.shields.io/badge/version-1.0.0-blue)"
+	check(extract_badge_version(text2) == "1.0.0", "extract_badge_version finds version in badge")
 
-	mut text3 := "name: \"concord\"\nversion: \"0.1.0\""
+	mut text3 := "name: \"concord\"\nversion: \"1.0.0\""
 	check(extract_yaml_field(text3, "name") == "concord", "extract_yaml_field extracts simple field")
 
-	mut text4 := "name = \"concord\"\nversion = \"0.1.0\""
+	mut text4 := "name = \"concord\"\nversion = \"1.0.0\""
 	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
-	check(extract_toml_field(text4, "version") == "0.1.0", "extract_toml_field extracts version value")
+	check(extract_toml_field(text4, "version") == "1.0.0", "extract_toml_field extracts version value")
 }
 
 func test_checks() {
