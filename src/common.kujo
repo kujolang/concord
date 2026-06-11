@@ -49,6 +49,10 @@ export func parse_subcommand(argv) {
 	return first
 }
 
+export func is_flag_token(value) {
+	return is_truthy(starts_with(to_string(value), "-"))
+}
+
 export func shift_args(argv) {
 	mut result := []
 	mut i := 1
