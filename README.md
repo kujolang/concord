@@ -24,7 +24,7 @@ Concord helps answer:
 ./kujo run concord.kujo -- tasks
 
 # Scan another project
-./kujo run concord.kujo -- scan --dir ../patchbrief
+./kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
 ## Commands
