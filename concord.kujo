@@ -21,61 +21,83 @@ from src.checks.source_of_truth import check_source_of_truth
 from src.reporter import generate_markdown_report, generate_json_report
 from src.fix_tasks import generate_fix_tasks
 
+func print_lines(lines) {
+	mut i := 0
+	while i < len(lines) {
+		print(lines[i])
+		i = i + 1
+	}
+}
+
+func append_findings(findings, new_findings) {
+	mut result := findings
+	mut i := 0
+	while i < len(new_findings) {
+		result = push(result, new_findings[i])
+		i = i + 1
+	}
+	return result
+}
+
 func print_help() {
-	print("Concord v" + VERSION)
-	print("")
-	print("An artifact drift and alignment checker for Kujo ecosystem projects.")
-	print("")
-	print("Usage:")
-	print("  ./kujo run concord.kujo scan [--dir <path>] [--format markdown|json]")
-	print("  ./kujo run concord.kujo check <category> [--dir <path>]")
-	print("  ./kujo run concord.kujo report [--dir <path>] [--format markdown|json]")
-	print("  ./kujo run concord.kujo tasks [--dir <path>]")
-	print("  ./kujo run concord.kujo version")
-	print("  ./kujo run concord.kujo help")
-	print("  ./kujo run concord.kujo --help")
-	print("  ./kujo run concord.kujo --version")
-	print("")
-	print("Commands:")
-	print("  scan     Run all drift checks and produce a full report")
-	print("  check    Run a specific check category")
-	print("  report   Generate report from the last scan")
-	print("  tasks    Generate fix task cards from scan findings")
-	print("  version  Print version information")
-	print("  help     Print this help message")
-	print("  --help   Print this help message")
-	print("  --version Print version information")
-	print("")
-	print("Check categories:")
-	print("  cli-docs       CLI ↔ Docs alignment")
-	print("  spec-eval      Spec ↔ Eval alignment")
-	print("  manifest       Manifest ↔ Docs alignment")
-	print("  versions       Version consistency")
-	print("  examples       Example validity")
-	print("  source-of-truth Source-of-truth mapping")
-	print("  all            All checks (same as scan)")
-	print("")
-	print("Options:")
-	print("  --dir <path>   Target directory (default: current directory)")
-	print("  --format       Output format: markdown (default) or json")
-	print("  --output <path> Write report to file instead of stdout")
-	print("")
-	print("Exit codes:")
-	print("  0  Success")
-	print("  2  Invalid usage or configuration")
-	print("  3  Verification/check failure (for check categories with findings)")
-	print("")
-	print("Examples:")
-	print("  ./kujo run concord.kujo scan")
-	print("  ./kujo run concord.kujo scan --dir /path/to/other-project --format json")
-	print("  ./kujo run concord.kujo check cli-docs")
-	print("  ./kujo run concord.kujo tasks --dir ../my-project")
+	print_lines([
+		"Concord v" + VERSION,
+		"",
+		"An artifact drift and alignment checker for Kujo ecosystem projects.",
+		"",
+		"Usage:",
+		"  ./kujo run concord.kujo scan [--dir <path>] [--format markdown|json]",
+		"  ./kujo run concord.kujo check <category> [--dir <path>]",
+		"  ./kujo run concord.kujo report [--dir <path>] [--format markdown|json]",
+		"  ./kujo run concord.kujo tasks [--dir <path>]",
+		"  ./kujo run concord.kujo version",
+		"  ./kujo run concord.kujo help",
+		"  ./kujo run concord.kujo --help",
+		"  ./kujo run concord.kujo --version",
+		"",
+		"Commands:",
+		"  scan     Run all drift checks and produce a full report",
+		"  check    Run a specific check category",
+		"  report   Generate report from the last scan",
+		"  tasks    Generate fix task cards from scan findings",
+		"  version  Print version information",
+		"  help     Print this help message",
+		"  --help   Print this help message",
+		"  --version Print version information",
+		"",
+		"Check categories:",
+		"  cli-docs       CLI ↔ Docs alignment",
+		"  spec-eval      Spec ↔ Eval alignment",
+		"  manifest       Manifest ↔ Docs alignment",
+		"  versions       Version consistency",
+		"  examples       Example validity",
+		"  source-of-truth Source-of-truth mapping",
+		"  all            All checks (same as scan)",
+		"",
+		"Options:",
+		"  --dir <path>   Target directory (default: current directory)",
+		"  --format       Output format: markdown (default) or json",
+		"  --output <path> Write report to file instead of stdout",
+		"",
+		"Exit codes:",
+		"  0  Success",
+		"  2  Invalid usage or configuration",
+		"  3  Verification/check failure (for check categories with findings)",
+		"",
+		"Examples:",
+		"  ./kujo run concord.kujo scan",
+		"  ./kujo run concord.kujo scan --dir /path/to/other-project --format json",
+		"  ./kujo run concord.kujo check cli-docs",
+		"  ./kujo run concord.kujo tasks --dir ../my-project",
+	])
 }
 
 func print_version() {
-	print("Concord v" + VERSION)
-	print("Artifact drift and alignment checker for Kujo ecosystem projects.")
-	print("Dogfood showcase tool — MVP.")
+	print_lines([
+		"Concord v" + VERSION,
+		"Artifact drift and alignment checker for Kujo ecosystem projects.",
+		"Dogfood showcase tool — MVP.",
+	])
 }
 
 func get_target_dir(argv) {
@@ -120,48 +142,12 @@ func validate_args(subcommand, rest) {
 func run_all_checks(dir_path, kujo_bin) {
 	mut findings := []
 
-	# Run each check category
-	mut cli_findings := check_cli_docs(dir_path, kujo_bin)
-	mut i := 0
-	while i < len(cli_findings) {
-		findings = push(findings, cli_findings[i])
-		i = i + 1
-	}
-
-	mut spec_findings := check_spec_eval(dir_path)
-	mut j := 0
-	while j < len(spec_findings) {
-		findings = push(findings, spec_findings[j])
-		j = j + 1
-	}
-
-	mut manifest_findings := check_manifest_docs(dir_path)
-	mut k := 0
-	while k < len(manifest_findings) {
-		findings = push(findings, manifest_findings[k])
-		k = k + 1
-	}
-
-	mut version_findings := check_version_consistency(dir_path)
-	mut v := 0
-	while v < len(version_findings) {
-		findings = push(findings, version_findings[v])
-		v = v + 1
-	}
-
-	mut example_findings := check_example_validity(dir_path, kujo_bin)
-	mut e := 0
-	while e < len(example_findings) {
-		findings = push(findings, example_findings[e])
-		e = e + 1
-	}
-
-	mut sot_findings := check_source_of_truth(dir_path)
-	mut s := 0
-	while s < len(sot_findings) {
-		findings = push(findings, sot_findings[s])
-		s = s + 1
-	}
+	findings = append_findings(findings, check_cli_docs(dir_path, kujo_bin))
+	findings = append_findings(findings, check_spec_eval(dir_path))
+	findings = append_findings(findings, check_manifest_docs(dir_path))
+	findings = append_findings(findings, check_version_consistency(dir_path))
+	findings = append_findings(findings, check_example_validity(dir_path, kujo_bin))
+	findings = append_findings(findings, check_source_of_truth(dir_path))
 
 	return findings
 }
