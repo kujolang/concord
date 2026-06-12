@@ -10,20 +10,27 @@ Concord helps answer:
 
 ## Quick Start
 
+From this repo:
+
 ```bash
-# Scan the current directory for drift
 ./kujo run concord.kujo -- scan
+```
 
-# JSON output for programmatic consumption
+Expected report shape:
+
+```text
+# Concord Drift Report
+...
+## Summary
+...
+```
+
+Useful follow-ups:
+
+```bash
 ./kujo run concord.kujo -- scan --format json
-
-# Run a specific check category
 ./kujo run concord.kujo -- check cli-docs
-
-# Generate fix task cards
 ./kujo run concord.kujo -- tasks
-
-# Scan another project
 ./kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
@@ -81,6 +88,23 @@ Use `scan`/`check` to find drift; use `report`/`tasks` to export findings and fo
 ```bash
 ./kujo test
 ```
+
+## Contributor and Agent Notes
+
+Prioritize copyable examples over tests: examples should model the most token-efficient idioms we want agents to imitate.
+
+Canonical surfaces:
+
+- `README.md` Quick Start and command tables are the copyable user-facing examples.
+- `concord.kujo` help text is the CLI contract surface.
+- `tests/concord_tests.kujo` is the active behavior test suite.
+
+Search hygiene:
+
+- Start with `README.md`, `concord.kujo`, `src/**/*.kujo`, and `tests/concord_tests.kujo`.
+- Exclude generated/bulk paths from the main sweep unless the task explicitly targets them; this repo's generated output is expected under `.dogfood/concord/loop/`.
+- Treat `tests/concord_tests.out` as expected-output data, not an example to shorten.
+- This repo currently has no `examples/` directory and no known legacy or expected-fail examples. If one is added later, label its status in the README or next to the file.
 
 ## Continuous Loop (All Four Tracks)
 
