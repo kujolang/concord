@@ -2,12 +2,48 @@
 
 from src.common import severity_weight, highest_severity, concord_version
 
+func append_lines(text, lines) {
+	mut result := text
+	mut i := 0
+	while i < len(lines) {
+		result = result + lines[i] + "\n"
+		i = i + 1
+	}
+	return result
+}
+
+func category_label(cat) {
+	if cat == "cli-docs-alignment" { return "CLI ↔ Docs Alignment" }
+	if cat == "spec-eval-alignment" { return "Spec ↔ Eval Alignment" }
+	if cat == "manifest-docs-alignment" { return "Manifest ↔ Docs Alignment" }
+	if cat == "version-consistency" { return "Version Consistency" }
+	if cat == "example-validity" { return "Example Validity" }
+	if cat == "source-of-truth" { return "Source of Truth" }
+	return cat
+}
+
+func severity_emoji(severity) {
+	if severity == "critical" { return "🔴" }
+	if severity == "high" { return "🟠" }
+	if severity == "medium" { return "🟡" }
+	return "🔵"
+}
+
+func field_row(label, value) {
+	return "| **" + label + "** | " + value + " |"
+}
+
 export func generate_markdown_report(dir_path, findings) {
 	mut report := ""
 	version := concord_version()
-	report = report + "# Concord Drift Report\n\n"
-	report = report + "**Concord v" + version + "** | **Directory:** `" + dir_path + "`\n\n"
-	report = report + "---\n\n"
+	report = append_lines(report, [
+		"# Concord Drift Report",
+		"",
+		"**Concord v" + version + "** | **Directory:** `" + dir_path + "`",
+		"",
+		"---",
+		""
+	])
 
 	# Summary
 	mut critical_count := 0
@@ -25,30 +61,50 @@ export func generate_markdown_report(dir_path, findings) {
 		i = i + 1
 	}
 
-	report = report + "## Summary\n\n"
-	report = report + "| Severity | Count |\n"
-	report = report + "|----------|-------|\n"
-	report = report + "| Critical | " + to_string(critical_count) + " |\n"
-	report = report + "| High     | " + to_string(high_count) + " |\n"
-	report = report + "| Medium   | " + to_string(medium_count) + " |\n"
-	report = report + "| Low      | " + to_string(low_count) + " |\n"
-	report = report + "| **Total** | **" + to_string(len(findings)) + "** |\n\n"
+	report = append_lines(report, [
+		"## Summary",
+		"",
+		"| Severity | Count |",
+		"|----------|-------|",
+		"| Critical | " + to_string(critical_count) + " |",
+		"| High     | " + to_string(high_count) + " |",
+		"| Medium   | " + to_string(medium_count) + " |",
+		"| Low      | " + to_string(low_count) + " |",
+		"| **Total** | **" + to_string(len(findings)) + "** |",
+		""
+	])
 
 	overall := highest_severity(findings)
 	if overall == "none" {
-		report = report + "**Result:** ✅ No significant drift detected.\n\n"
+		report = append_lines(report, [
+			"**Result:** ✅ No significant drift detected.",
+			""
+		])
 	} else {
-		report = report + "**Result:** ⚠️ Drift detected (highest severity: **" + overall + "**)\n\n"
+		report = append_lines(report, [
+			"**Result:** ⚠️ Drift detected (highest severity: **" + overall + "**)",
+			""
+		])
 	}
 
-	report = report + "---\n\n"
+	report = append_lines(report, [
+		"---",
+		""
+	])
 
 	# Findings
 	if len(findings) == 0 {
-		report = report + "## Findings\n\n"
-		report = report + "No drift findings. All checked artifacts appear consistent.\n\n"
+		report = append_lines(report, [
+			"## Findings",
+			"",
+			"No drift findings. All checked artifacts appear consistent.",
+			""
+		])
 	} else {
-		report = report + "## Findings\n\n"
+		report = append_lines(report, [
+			"## Findings",
+			""
+		])
 
 		# Group by category
 		mut categories := {}
@@ -71,39 +127,38 @@ export func generate_markdown_report(dir_path, findings) {
 			mut cat_findings := categories[cat]
 
 			# Category header
-			mut cat_label := cat
-			if cat == "cli-docs-alignment" { cat_label = "CLI ↔ Docs Alignment" }
-			if cat == "spec-eval-alignment" { cat_label = "Spec ↔ Eval Alignment" }
-			if cat == "manifest-docs-alignment" { cat_label = "Manifest ↔ Docs Alignment" }
-			if cat == "version-consistency" { cat_label = "Version Consistency" }
-			if cat == "example-validity" { cat_label = "Example Validity" }
-			if cat == "source-of-truth" { cat_label = "Source of Truth" }
-
-			report = report + "### " + cat_label + "\n\n"
+			report = append_lines(report, [
+				"### " + category_label(cat),
+				""
+			])
 
 			mut f := 0
 			while f < len(cat_findings) {
 				finding := cat_findings[f]
-				sev_emoji := "🔵"
-				if finding["severity"] == "critical" { sev_emoji = "🔴" }
-				if finding["severity"] == "high" { sev_emoji = "🟠" }
-				if finding["severity"] == "medium" { sev_emoji = "🟡" }
-				if finding["severity"] == "low" { sev_emoji = "🔵" }
 
-				report = report + "#### " + sev_emoji + " " + finding["title"] + "\n\n"
-				report = report + "| Field | Value |\n"
-				report = report + "|-------|-------|\n"
-				report = report + "| **ID** | `" + finding["id"] + "` |\n"
-				report = report + "| **Severity** | " + finding["severity"] + " |\n"
-				report = report + "| **Confidence** | " + finding["confidence"] + " |\n"
-				report = report + "| **Source** | `" + finding["source_artifact"] + "` |\n"
-				report = report + "| **Target** | `" + finding["target_artifact"] + "` |\n"
-				report = report + "| **Review Required** | " + to_string(finding["human_review_required"]) + " |\n\n"
-				report = report + "**Summary:** " + finding["summary"] + "\n\n"
-				report = report + "**Expected:** " + finding["expected"] + "\n\n"
-				report = report + "**Actual:** " + finding["actual"] + "\n\n"
-				report = report + "**Suggested Fix:** " + finding["suggested_fix"] + "\n\n"
-				report = report + "---\n\n"
+				report = append_lines(report, [
+					"#### " + severity_emoji(finding["severity"]) + " " + finding["title"],
+					"",
+					"| Field | Value |",
+					"|-------|-------|",
+					field_row("ID", "`" + finding["id"] + "`"),
+					field_row("Severity", finding["severity"]),
+					field_row("Confidence", finding["confidence"]),
+					field_row("Source", "`" + finding["source_artifact"] + "`"),
+					field_row("Target", "`" + finding["target_artifact"] + "`"),
+					field_row("Review Required", to_string(finding["human_review_required"])),
+					"",
+					"**Summary:** " + finding["summary"],
+					"",
+					"**Expected:** " + finding["expected"],
+					"",
+					"**Actual:** " + finding["actual"],
+					"",
+					"**Suggested Fix:** " + finding["suggested_fix"],
+					"",
+					"---",
+					""
+				])
 				f = f + 1
 			}
 			c = c + 1
@@ -111,8 +166,11 @@ export func generate_markdown_report(dir_path, findings) {
 	}
 
 	# Footer
-	report = report + "---\n\n"
-	report = report + "*Report generated by Concord v" + version + ". Concord is an MVP dogfood tool for the Kujo ecosystem.*\n"
+	report = append_lines(report, [
+		"---",
+		"",
+		"*Report generated by Concord v" + version + ". Concord is an MVP dogfood tool for the Kujo ecosystem.*"
+	])
 
 	return report
 }
