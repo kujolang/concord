@@ -2,15 +2,43 @@
 
 from src.common import severity_weight, concord_version
 
+func append_lines(text, lines) {
+	mut result := text
+	mut i := 0
+	while i < len(lines) {
+		result = result + lines[i] + "\n"
+		i = i + 1
+	}
+	return result
+}
+
+func severity_emoji(severity) {
+	if severity == "critical" { return "🔴" }
+	if severity == "high" { return "🟠" }
+	if severity == "medium" { return "🟡" }
+	return "🔵"
+}
+
+func field_row(label, value) {
+	return "| **" + label + "** | " + value + " |"
+}
+
 export func generate_fix_tasks(findings) {
 	version := concord_version()
 	mut report := ""
-	report = report + "# Concord Fix Tasks\n\n"
-	report = report + "**Concord v" + version + "**\n\n"
-	report = report + "---\n\n"
+	report = append_lines(report, [
+		"# Concord Fix Tasks",
+		"",
+		"**Concord v" + version + "**",
+		"",
+		"---",
+		""
+	])
 
 	if len(findings) == 0 {
-		report = report + "✅ No fix tasks needed. No drift findings detected.\n"
+		report = append_lines(report, [
+			"✅ No fix tasks needed. No drift findings detected."
+		])
 		return report
 	}
 
@@ -56,39 +84,50 @@ export func generate_fix_tasks(findings) {
 		j = j + 1
 	}
 
-	report = report + "## Action Required\n\n"
-	report = report + "The following tasks address drift detected by Concord. Review each task and apply fixes as appropriate.\n\n"
+	report = append_lines(report, [
+		"## Action Required",
+		"",
+		"The following tasks address drift detected by Concord. Review each task and apply fixes as appropriate.",
+		""
+	])
 
 	mut task_num := 1
 	mut idx := 0
 	while idx < len(ordered) {
 		f := ordered[idx]
-		sev_emoji := "🔵"
-		if f["severity"] == "critical" { sev_emoji = "🔴" }
-		if f["severity"] == "high" { sev_emoji = "🟠" }
-		if f["severity"] == "medium" { sev_emoji = "🟡" }
 
-		report = report + "### Task " + to_string(task_num) + ": " + sev_emoji + " " + f["title"] + "\n\n"
-		report = report + "| Field | Value |\n"
-		report = report + "|-------|-------|\n"
-		report = report + "| **Finding ID** | `" + f["id"] + "` |\n"
-		report = report + "| **Severity** | " + f["severity"] + " |\n"
-		report = report + "| **Confidence** | " + f["confidence"] + " |\n"
-		report = report + "| **Category** | " + f["category"] + " |\n"
-		report = report + "| **Human Review** | " + to_string(f["human_review_required"]) + " |\n\n"
-
-		report = report + "**Problem:** " + f["summary"] + "\n\n"
-		report = report + "**Affected Files:**\n"
-		report = report + "- `" + f["source_artifact"] + "`\n"
+		report = append_lines(report, [
+			"### Task " + to_string(task_num) + ": " + severity_emoji(f["severity"]) + " " + f["title"],
+			"",
+			"| Field | Value |",
+			"|-------|-------|",
+			field_row("Finding ID", "`" + f["id"] + "`"),
+			field_row("Severity", f["severity"]),
+			field_row("Confidence", f["confidence"]),
+			field_row("Category", f["category"]),
+			field_row("Human Review", to_string(f["human_review_required"])),
+			"",
+			"**Problem:** " + f["summary"],
+			"",
+			"**Affected Files:**",
+			"- `" + f["source_artifact"] + "`"
+		])
 		if f["target_artifact"] != "(none)" {
 			if f["target_artifact"] != "(multiple)" {
-				report = report + "- `" + f["target_artifact"] + "`\n"
+				report = append_lines(report, [
+					"- `" + f["target_artifact"] + "`"
+				])
 			}
 		}
-		report = report + "\n"
-		report = report + "**Suggested Fix:** " + f["suggested_fix"] + "\n\n"
-		report = report + "**Validation:** Run `concord scan` after applying the fix to verify drift is resolved.\n\n"
-		report = report + "---\n\n"
+		report = append_lines(report, [
+			"",
+			"**Suggested Fix:** " + f["suggested_fix"],
+			"",
+			"**Validation:** Run `concord scan` after applying the fix to verify drift is resolved.",
+			"",
+			"---",
+			""
+		])
 
 		task_num = task_num + 1
 		idx = idx + 1

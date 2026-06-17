@@ -9,6 +9,7 @@
 #   ./kujo run concord.kujo help
 
 VERSION := "1.0.0"
+VALID_CATEGORIES := "cli-docs, spec-eval, manifest, versions, examples, source-of-truth, all"
 
 from src.common import parse_flag, parse_subcommand, shift_args, highest_severity, is_truthy, is_flag_token, verification_exit_code, scan_exit_code
 from src.scanner import is_git_repo, is_kujo_project
@@ -26,6 +27,29 @@ func print_lines(lines) {
 	while i < len(lines) {
 		print(lines[i])
 		i = i + 1
+	}
+}
+
+func print_usage_hint() {
+	print("Run './kujo run concord.kujo help' for usage information.")
+}
+
+func print_usage_error(message) {
+	print("Error: " + message)
+	print_usage_hint()
+}
+
+func print_unknown_category(category) {
+	print("Error: Unknown check category '" + category + "'")
+	print("Valid categories: " + VALID_CATEGORIES)
+}
+
+func write_or_print(output_path, written_message, output) {
+	if output_path != "" {
+		write_file(output_path, output)
+		print(written_message + output_path)
+	} else {
+		print(output)
 	}
 }
 
@@ -123,8 +147,7 @@ func validate_args(subcommand, rest) {
 			continue
 		}
 		if is_flag_token(arg) == 1 {
-			print("Error: Unknown option '" + arg + "'")
-			print("Run './kujo run concord.kujo help' for usage information.")
+			print_usage_error("Unknown option '" + arg + "'")
 			return 0
 		}
 		if subcommand == "check" && seen_category == 0 {
@@ -132,8 +155,7 @@ func validate_args(subcommand, rest) {
 			i = i + 1
 			continue
 		}
-		print("Error: Unexpected argument '" + arg + "'")
-		print("Run './kujo run concord.kujo help' for usage information.")
+		print_usage_error("Unexpected argument '" + arg + "'")
 		return 0
 	}
 	return 1
@@ -174,9 +196,23 @@ func run_check_category(category, dir_path, kujo_bin) {
 	if category == "all" {
 		return run_all_checks(dir_path, kujo_bin)
 	}
-	print("Error: Unknown check category '" + category + "'")
-	print("Valid categories: cli-docs, spec-eval, manifest, versions, examples, source-of-truth, all")
+	print_unknown_category(category)
 	return []
+}
+
+func print_drift_warning(overall) {
+	if overall == "high" {
+		print_lines([
+			"",
+			"⚠️  High-severity drift detected. Review findings above."
+		])
+	}
+	if overall == "critical" {
+		print_lines([
+			"",
+			"⚠️  Critical drift detected. Review findings above."
+		])
+	}
 }
 
 func handle_scan(dir_path, kujo_bin, format, output_path) {
@@ -189,37 +225,39 @@ func handle_scan(dir_path, kujo_bin, format, output_path) {
 		report_output = generate_markdown_report(dir_path, findings)
 	}
 
-	if output_path != "" {
-		write_file(output_path, report_output)
-		print("Report written to: " + output_path)
-	} else {
-		print(report_output)
-	}
+	write_or_print(output_path, "Report written to: ", report_output)
 
 	# Exit code based on severity
 	overall := highest_severity(findings)
-	if overall == "high" {
-		print("")
-		print("⚠️  High-severity drift detected. Review findings above.")
-	}
-	if overall == "critical" {
-		print("")
-		print("⚠️  Critical drift detected. Review findings above.")
-	}
+	print_drift_warning(overall)
 	return scan_exit_code(findings)
+}
+
+func print_check_argument_usage() {
+	print_lines([
+		"Error: 'check' requires a category argument.",
+		"Usage: ./kujo run concord.kujo check <category> [--dir <path>]",
+		"Categories: " + VALID_CATEGORIES
+	])
+}
+
+func print_check_finding(f) {
+	print_lines([
+		"[" + f["severity"] + "] " + f["title"],
+		"  " + f["summary"],
+		"  Suggested: " + f["suggested_fix"],
+		""
+	])
 }
 
 func handle_check(dir_path, kujo_bin, format, rest) {
 	if len(rest) < 1 {
-		print("Error: 'check' requires a category argument.")
-		print("Usage: ./kujo run concord.kujo check <category> [--dir <path>]")
-		print("Categories: cli-docs, spec-eval, manifest, versions, examples, source-of-truth, all")
+		print_check_argument_usage()
 		return 2
 	}
 	category := rest[0]
 	if category != "cli-docs" && category != "spec-eval" && category != "manifest" && category != "versions" && category != "examples" && category != "source-of-truth" && category != "all" {
-		print("Error: Unknown check category '" + category + "'")
-		print("Valid categories: cli-docs, spec-eval, manifest, versions, examples, source-of-truth, all")
+		print_unknown_category(category)
 		return 2
 	}
 	mut findings := run_check_category(category, dir_path, kujo_bin)
@@ -230,10 +268,7 @@ func handle_check(dir_path, kujo_bin, format, rest) {
 		mut i := 0
 		while i < len(findings) {
 			f := findings[i]
-			print("[" + f["severity"] + "] " + f["title"])
-			print("  " + f["summary"])
-			print("  Suggested: " + f["suggested_fix"])
-			print("")
+			print_check_finding(f)
 			i = i + 1
 		}
 		if len(findings) == 0 {
@@ -253,24 +288,14 @@ func handle_report(dir_path, kujo_bin, format, output_path) {
 		report_output = generate_markdown_report(dir_path, findings)
 	}
 
-	if output_path != "" {
-		write_file(output_path, report_output)
-		print("Report written to: " + output_path)
-	} else {
-		print(report_output)
-	}
+	write_or_print(output_path, "Report written to: ", report_output)
 }
 
 func handle_tasks(dir_path, kujo_bin, output_path) {
 	mut findings := run_all_checks(dir_path, kujo_bin)
 	mut tasks_output := generate_fix_tasks(findings)
 
-	if output_path != "" {
-		write_file(output_path, tasks_output)
-		print("Fix tasks written to: " + output_path)
-	} else {
-		print(tasks_output)
-	}
+	write_or_print(output_path, "Fix tasks written to: ", tasks_output)
 }
 
 # --- Main ---
@@ -305,8 +330,7 @@ func main() {
 
 	if subcommand == "version" {
 		if len(rest) > 0 {
-			print("Error: Unexpected argument '" + rest[0] + "'")
-			print("Run './kujo run concord.kujo help' for usage information.")
+			print_usage_error("Unexpected argument '" + rest[0] + "'")
 			exit(2)
 		}
 		print_version()
@@ -315,8 +339,7 @@ func main() {
 
 	if subcommand == "help" {
 		if len(rest) > 0 {
-			print("Error: Unexpected argument '" + rest[0] + "'")
-			print("Run './kujo run concord.kujo help' for usage information.")
+			print_usage_error("Unexpected argument '" + rest[0] + "'")
 			exit(2)
 		}
 		print_help()
@@ -324,8 +347,7 @@ func main() {
 	}
 
 	if subcommand == "" && is_flag_token(argv[0]) == 1 {
-		print("Error: Unknown option '" + argv[0] + "'")
-		print("Run './kujo run concord.kujo help' for usage information.")
+		print_usage_error("Unknown option '" + argv[0] + "'")
 		exit(2)
 	}
 
@@ -362,8 +384,7 @@ func main() {
 	}
 
 	# Unknown subcommand
-	print("Error: Unknown command '" + subcommand + "'")
-	print("Run './kujo run concord.kujo help' for usage information.")
+	print_usage_error("Unknown command '" + subcommand + "'")
 	exit(2)
 }
 
