@@ -5,7 +5,7 @@
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
 from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token
-from src.scanner import is_kujo_project, find_readme, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field
+from src.scanner import is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field
 from src.checks.cli_docs import check_cli_docs
 from src.reporter import generate_markdown_report, generate_json_report
 from src.fix_tasks import generate_fix_tasks
@@ -73,6 +73,15 @@ func test_scanner() {
 
 	mut readme := find_readme(".")
 	check(readme != "", "find_readme finds README.md")
+
+	mut eval_files := find_eval_files(".")
+	check(len(eval_files) > 0, "find_eval_files finds repo eval metadata")
+
+	mut example_files := find_example_files(".")
+	check(len(example_files) > 0, "find_example_files finds examples directory")
+
+	mut cli_entry := find_cli_entry(".")
+	check(ends_with(cli_entry, "concord.kujo") == 1, "find_cli_entry finds manifest entrypoint")
 
 	mut text1 := "```bash\nkujo run concord.kujo scan\nkujo run concord.kujo help\n```"
 	mut cmds := extract_fenced_commands(text1)

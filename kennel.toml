@@ -13,7 +13,7 @@ readme = "README.md"
 stage = "experimental"
 stability = "early"
 public_api = false
-notes = "MVP dogfood build. Not yet ready for production use."
+notes = "Early dogfood build. Not yet ready for production use."
 
 [kujo]
 minimum_version = "1.0.0"

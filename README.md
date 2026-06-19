@@ -29,7 +29,9 @@ Useful follow-ups:
 
 ```bash
 ./kujo run concord.kujo -- scan --format json
+./kujo run concord.kujo -- scan --output /path/to/report.md
 ./kujo run concord.kujo -- check cli-docs
+./kujo run concord.kujo -- check --format json cli-docs
 ./kujo run concord.kujo -- tasks
 ./kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
@@ -83,6 +85,24 @@ Use `scan`/`check` to find drift; use `report`/`tasks` to export findings and fo
 - Kujo runtime (repo-local `./kujo` wrapper; set `KUJO_RUNTIME_BIN` to the actual runtime binary)
 - Run inside a project directory (git repo recommended)
 
+## Readiness Posture
+
+Concord is useful as a local drift review tool and Kujo dogfood showcase, but it should not be described as enterprise-ready yet. The package manifest currently marks it as `experimental` and `early`; that is intentional until the scanner has broader fixture coverage, documented false-positive expectations, and hardened output/path handling.
+
+Current strengths:
+
+- Rule-based checks with stable Markdown and JSON report shapes
+- Explicit exit codes for CI-style use
+- Self-dogfood coverage through this repo's Spec, tests, eval metadata, examples, and manifests
+- No network services or AI dependencies
+
+Known maturity boundaries:
+
+- YAML/TOML/Markdown extraction is regex-based by design
+- Findings are drift leads for review, not proof of correctness
+- The default scan is single-repo and convention-oriented
+- Enterprise rollout should add policy configuration, larger fixture suites, and clearer output safety rules
+
 ## Running Tests
 
 ```bash
@@ -104,7 +124,8 @@ Search hygiene:
 - Start with `README.md`, `concord.kujo`, `src/**/*.kujo`, and `tests/concord_tests.kujo`.
 - Exclude generated/bulk paths from the main sweep unless the task explicitly targets them; this repo's generated output is expected under `.dogfood/concord/loop/`.
 - Treat `tests/concord_tests.out` as expected-output data, not an example to shorten.
-- This repo currently has no `examples/` directory and no known legacy or expected-fail examples. If one is added later, label its status in the README or next to the file.
+- `examples/README.md` contains copyable usage examples for humans and scan fixtures for Concord.
+- `tests/concord_eval.json` is lightweight eval metadata used to keep the Spec/Eval alignment surface present in this repo.
 
 ## Continuous Loop (All Four Tracks)
 
@@ -137,6 +158,12 @@ Artifacts are written under `.dogfood/concord/loop/`:
 
 ```
 concord.kujo              # Main entrypoint
+README.md                 # User-facing documentation and copyable commands
+concord.spec.yml          # Spec file (task definition)
+kujo.toml                 # Kujo project config
+kennel.toml               # Kennel package manifest
+LICENSE                   # MIT license
+kujo                      # Repo-local wrapper; requires KUJO_RUNTIME_BIN
 src/
   common.kujo             # Shared utilities (arg parsing, string helpers)
   scanner.kujo            # Artifact discovery and file detection
@@ -149,13 +176,17 @@ src/
     source_of_truth.kujo  # Source-of-truth mapping
   reporter.kujo           # Markdown and JSON report generation
   fix_tasks.kujo          # Fix task card generation
+examples/
+  README.md               # Copyable example commands
 tests/
   concord_tests.kujo      # Test suite
-concord.spec.yml          # Spec file (task definition)
-kujo.toml                 # Kujo project config
-kennel.toml               # Kennel package manifest
+  concord_eval.json       # Eval metadata for Spec/Eval alignment checks
+docs/
+  NEXT_REVIEW_2026-06-19.md # Follow-up readiness review checklist
 .dogfood/concord/         # Ecosystem dogfood reports
 ```
+
+The root files above are intentional contract files rather than leftovers from the pre-`src/` layout. Implementation modules live under `src/`; the root remains the place for the executable entrypoint, project/spec manifests, license, wrapper, and README.
 
 ## How Concord Differs from Other Dogfood Tools
 
@@ -168,7 +199,7 @@ kennel.toml               # Kennel package manifest
 
 ## Status
 
-MVP — dogfood build. Testing the Kujo ecosystem while building a useful drift checker.
+Early dogfood build. Concord is already useful for local artifact-drift review, and the next milestone is broader fixture-backed hardening toward production-grade adoption.
 
 ## License
 

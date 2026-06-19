@@ -1,0 +1,28 @@
+{
+  "suite": "concord-core",
+  "description": "Repo-local eval metadata for Concord's own artifact-alignment contract.",
+  "checks": [
+    {
+      "name": "scan markdown report",
+      "type": "output_contains",
+      "command": "./kujo run concord.kujo -- scan",
+      "expected": [
+        "# Concord Drift Report",
+        "## Summary",
+        "## Findings"
+      ]
+    },
+    {
+      "name": "scan json findings array",
+      "type": "json_path_exists",
+      "command": "./kujo run concord.kujo -- scan --format json",
+      "path": "$.findings"
+    },
+    {
+      "name": "invalid args exit code",
+      "type": "exit_code",
+      "command": "./kujo run concord.kujo -- scan --nonexistent-flag",
+      "expected": 2
+    }
+  ]
+}
