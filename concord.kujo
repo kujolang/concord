@@ -120,7 +120,7 @@ func print_version() {
 	print_lines([
 		"Concord v" + VERSION,
 		"Artifact drift and alignment checker for Kujo ecosystem projects.",
-		"Dogfood showcase tool — MVP.",
+		"Dogfood showcase tool — early build.",
 	])
 }
 
@@ -134,16 +134,44 @@ func get_output_format(argv) {
 	return format
 }
 
+func get_check_category(rest) {
+	mut i := 0
+	while i < len(rest) {
+		arg := rest[i]
+		if arg == "--dir" || arg == "--format" || arg == "--output" {
+			i = i + 2
+			continue
+		}
+		if is_flag_token(arg) == 0 {
+			return arg
+		}
+		i = i + 1
+	}
+	return ""
+}
+
 func validate_args(subcommand, rest) {
 	mut i := 0
 	mut seen_category := 0
 	while i < len(rest) {
 		arg := rest[i]
 		if arg == "--dir" || arg == "--format" || arg == "--output" {
-			i = i + 1
-			if i < len(rest) && is_flag_token(rest[i]) == 0 {
-				i = i + 1
+			if i + 1 >= len(rest) {
+				print_usage_error("Option '" + arg + "' requires a value.")
+				return 0
 			}
+			if is_flag_token(rest[i + 1]) == 1 {
+				print_usage_error("Option '" + arg + "' requires a value.")
+				return 0
+			}
+			if arg == "--format" {
+				format := rest[i + 1]
+				if format != "markdown" && format != "json" {
+					print_usage_error("Unsupported output format '" + format + "'. Use markdown or json.")
+					return 0
+				}
+			}
+			i = i + 2
 			continue
 		}
 		if is_flag_token(arg) == 1 {
@@ -251,11 +279,11 @@ func print_check_finding(f) {
 }
 
 func handle_check(dir_path, kujo_bin, format, rest) {
-	if len(rest) < 1 {
+	category := get_check_category(rest)
+	if category == "" {
 		print_check_argument_usage()
 		return 2
 	}
-	category := rest[0]
 	if category != "cli-docs" && category != "spec-eval" && category != "manifest" && category != "versions" && category != "examples" && category != "source-of-truth" && category != "all" {
 		print_unknown_category(category)
 		return 2
@@ -321,10 +349,6 @@ func main() {
 	subcommand := parse_subcommand(argv)
 	rest := shift_args(argv)
 
-	dir_path := get_target_dir(rest)
-	format := get_output_format(rest)
-	output_path := parse_flag(rest, "--output", "")
-
 	# Determine ./kujo binary
 	mut kujo_bin := "kujo"
 
@@ -351,6 +375,14 @@ func main() {
 		exit(2)
 	}
 
+	if validate_args(subcommand, rest) == 0 {
+		exit(2)
+	}
+
+	dir_path := get_target_dir(rest)
+	format := get_output_format(rest)
+	output_path := parse_flag(rest, "--output", "")
+
 	# Validate directory
 	if is_truthy(file_exists(dir_path)) == 0 {
 		print("Error: Directory not found: " + dir_path)
@@ -358,10 +390,6 @@ func main() {
 	}
 	if is_truthy(path_is_dir(dir_path)) == 0 {
 		print("Error: Not a directory: " + dir_path)
-		exit(2)
-	}
-
-	if validate_args(subcommand, rest) == 0 {
 		exit(2)
 	}
 
