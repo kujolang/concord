@@ -1,5 +1,9 @@
 # Concord
 
+[![Version](https://img.shields.io/badge/version-1.0.0-black)](https://github.com/kujolang/concord)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+[![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
+
 A local drift-checking tool that compares the important artifacts in a repo and surfaces mismatches. Built in [Kujo](https://github.com/kujolang/kujo) as an ecosystem dogfood showcase.
 
 Concord surfaces drift and follow-up work; it does not prove correctness or replace review.
