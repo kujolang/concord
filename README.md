@@ -40,6 +40,8 @@ Useful follow-ups:
 ./kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
+Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README blocks. JavaScript package names and versions are parsed as JSON string values before manifest and version comparisons.
+
 ## Commands
 
 | Command | Description |

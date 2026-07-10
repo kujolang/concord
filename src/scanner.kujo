@@ -93,6 +93,9 @@ export func find_eval_files(dir_path) {
 					if is_truthy(contains(content, "\"suite\"")) == 1 {
 						is_eval = 1
 					}
+					if is_truthy(contains(content, "\"tests\"")) == 1 && is_truthy(contains(content, "\"check\"")) == 1 {
+						is_eval = 1
+					}
 					if is_eval == 1 {
 						result = push(result, full_path)
 					}
@@ -213,8 +216,31 @@ export func looks_like_command(line) {
 	if is_truthy(starts_with(s, "scout ")) == 1 { return 1 }
 	if is_truthy(starts_with(s, "git ")) == 1 { return 1 }
 	if is_truthy(starts_with(s, "bash ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "node ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "npm ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "npx ")) == 1 { return 1 }
+	if is_truthy(starts_with(s, "tribunal ")) == 1 { return 1 }
 	if is_truthy(starts_with(s, "./kujo run concord.kujo")) == 1 { return 1 }
 	return 0
+}
+
+export func extract_json_string_field(text, field_name) {
+	pattern := "\\\"" + field_name + "\\\"\\s*:\\s*\\\"[^\\\"]+\\\""
+	matches := regex_find_all(text, pattern)
+	if len(matches) == 0 {
+		return ""
+	}
+	raw := matches[0]
+	parts := split(raw, ":")
+	if len(parts) < 2 {
+		return ""
+	}
+	value := trim_space(parts[1])
+	quote_parts := split(value, "\"")
+	if len(quote_parts) > 1 {
+		return trim_space(quote_parts[1])
+	}
+	return ""
 }
 
 export func extract_fenced_commands(text) {

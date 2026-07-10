@@ -1,7 +1,7 @@
 # Concord — Version consistency checks
 
 from src.common import read_file_safe, extract_version_from_text, is_truthy
-from src.scanner import find_readme, find_manifest_files, find_changelog, extract_toml_field, extract_badge_version
+from src.scanner import find_readme, find_manifest_files, find_changelog, extract_toml_field, extract_json_string_field, extract_badge_version
 
 export func check_version_consistency(dir_path) {
 	mut findings := []
@@ -35,10 +35,7 @@ export func check_version_consistency(dir_path) {
 			m_ver = extract_toml_field(manifest_content, "version")
 		}
 		if is_truthy(ends_with(manifest_path, "package.json")) == 1 {
-			mut ver_matches := regex_find_all(manifest_content, "\"version\":\\s*\"([^\"]+)\"")
-			if len(ver_matches) > 0 {
-				m_ver = ver_matches[0]
-			}
+			m_ver = extract_json_string_field(manifest_content, "version")
 		}
 		if m_ver != "" {
 			version_sources[manifest_path] = m_ver

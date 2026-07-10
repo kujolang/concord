@@ -1,7 +1,7 @@
 # Concord — Manifest ↔ Docs alignment checks
 
 from src.common import read_file_safe, extract_version_from_text, is_truthy
-from src.scanner import find_readme, find_manifest_files, extract_toml_field, extract_badge_version
+from src.scanner import find_readme, find_manifest_files, extract_toml_field, extract_json_string_field, extract_badge_version
 
 export func check_manifest_docs(dir_path) {
 	mut findings := []
@@ -64,10 +64,7 @@ export func check_manifest_docs(dir_path) {
 			manifest_name = extract_toml_field(manifest_content, "name")
 		}
 		if is_truthy(ends_with(manifest_path, "package.json")) == 1 {
-			mut name_matches := regex_find_all(manifest_content, "\"name\":\\s*\"([^\"]+)\"")
-			if len(name_matches) > 0 {
-				manifest_name = name_matches[0]
-			}
+			manifest_name = extract_json_string_field(manifest_content, "name")
 		}
 
 		# Extract version from manifest
@@ -82,10 +79,7 @@ export func check_manifest_docs(dir_path) {
 			manifest_version = extract_toml_field(manifest_content, "version")
 		}
 		if is_truthy(ends_with(manifest_path, "package.json")) == 1 {
-			mut ver_matches := regex_find_all(manifest_content, "\"version\":\\s*\"([^\"]+)\"")
-			if len(ver_matches) > 0 {
-				manifest_version = ver_matches[0]
-			}
+			manifest_version = extract_json_string_field(manifest_content, "version")
 		}
 
 		# Compare name against README title

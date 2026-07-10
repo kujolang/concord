@@ -5,7 +5,7 @@
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
 from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token
-from src.scanner import is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field
+from src.scanner import is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command
 from src.checks.cli_docs import check_cli_docs
 from src.reporter import generate_markdown_report, generate_json_report
 from src.fix_tasks import generate_fix_tasks
@@ -96,6 +96,13 @@ func test_scanner() {
 	mut text4 := "name = \"concord\"\nversion = \"1.0.0\""
 	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
 	check(extract_toml_field(text4, "version") == "1.0.0", "extract_toml_field extracts version value")
+
+	mut text5 := "{\n  \"name\": \"@kujolang/tribunal\",\n  \"version\": \"0.1.0\"\n}"
+	check(extract_json_string_field(text5, "name") == "@kujolang/tribunal", "extract_json_string_field extracts scoped package name")
+	check(extract_json_string_field(text5, "version") == "0.1.0", "extract_json_string_field extracts package version")
+	check(looks_like_command("npm run build") == 1, "looks_like_command recognizes npm")
+	check(looks_like_command("node dist/src/cli.js help") == 1, "looks_like_command recognizes node")
+	check(looks_like_command("tribunal review docket.md") == 1, "looks_like_command recognizes standalone ecosystem CLIs")
 }
 
 func test_checks() {
