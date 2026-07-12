@@ -1,0 +1,36 @@
+objective: "Remove the pure HLP-015 json_string wrapper and use Kujo-native JSON serialization while preserving Concord report contracts."
+checklist_file: ""
+max_iterations: 8
+max_no_progress: 2
+max_consecutive_failures: 3
+
+allowed_actions:
+  - read_files
+  - edit_files
+  - run_tests
+  - commit_local_changes
+
+blocked_actions:
+  - deploy
+  - destructive_cleanup
+  - production_config_change
+
+eval_gates:
+  - id: source_checks
+    command: "for f in concord.kujo src/*.kujo src/checks/*.kujo tests/concord_tests.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done"
+  - id: tests
+    command: "KUJO_RUNTIME_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo ./kujo test"
+  - id: diff_check
+    command: 'files=$(git diff --name-only | grep -v "^.loop-engineering/" || true); if [ -n "$files" ]; then git diff --check -- $files; fi'
+
+commit:
+  enabled: false
+  strategy: small_meaningful
+  push: false
+
+memory:
+  enabled: false
+  provider: strata
+  project: "Agent Notes"
+  mode: consolidate
+  retrieval_tests: true

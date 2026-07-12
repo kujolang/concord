@@ -86,12 +86,6 @@ export func file_has_extension(path, ext) {
 	return is_truthy(ends_with(to_lower(path), to_lower(ext)))
 }
 
-# --- JSON helpers ---
-
-export func json_string(obj) {
-	return to_json_pretty(obj)
-}
-
 export func concord_version() {
 	return "1.0.0"
 }
