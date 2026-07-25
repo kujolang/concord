@@ -17,7 +17,7 @@ Concord helps answer:
 From this repo:
 
 ```bash
-./kujo run concord.kujo -- scan
+kujo run concord.kujo -- scan
 ```
 
 Expected report shape:
@@ -32,12 +32,12 @@ Expected report shape:
 Useful follow-ups:
 
 ```bash
-./kujo run concord.kujo -- scan --format json
-./kujo run concord.kujo -- scan --output /path/to/report.md
-./kujo run concord.kujo -- check cli-docs
-./kujo run concord.kujo -- check --format json cli-docs
-./kujo run concord.kujo -- tasks
-./kujo run concord.kujo -- scan --dir /path/to/other-project
+kujo run concord.kujo -- scan --format json
+kujo run concord.kujo -- scan --output /path/to/report.md
+kujo run concord.kujo -- check cli-docs
+kujo run concord.kujo -- check --format json cli-docs
+kujo run concord.kujo -- tasks
+kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
 Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README blocks. JavaScript package names and versions are parsed as JSON string values before manifest and version comparisons.
@@ -88,7 +88,7 @@ Use `scan`/`check` to find drift; use `report`/`tasks` to export findings and fo
 
 ## Requirements
 
-- Kujo runtime (repo-local `./kujo` wrapper; set `KUJO_RUNTIME_BIN` to the actual runtime binary)
+- Kujo runtime available as `kujo` on `PATH`
 - Run inside a project directory (git repo recommended)
 
 ## Readiness Posture
@@ -112,7 +112,7 @@ Known maturity boundaries:
 ## Running Tests
 
 ```bash
-./kujo test
+kujo test
 ```
 
 ## Contributor and Agent Notes
