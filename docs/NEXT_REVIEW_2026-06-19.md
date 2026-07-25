@@ -4,7 +4,7 @@ This checklist captures the next set of improvements to move Concord from a usef
 
 ## Current Session Baseline
 
-- Tests pass with `KUJO_RUNTIME_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/release/kujo ./kujo test`.
+- Tests pass with `KUJO_RUNTIME_BIN=kujo ./kujo test`.
 - Concord self-scan returns zero findings after adding repo-local eval metadata and examples.
 - CLI argument handling now rejects missing option values and unsupported `--format` values with exit code `2`.
 - `check` can now find its category when flags appear before the category, such as `check --format json cli-docs`.
