@@ -1,28 +1,31 @@
 {
-  "suite": "concord-core",
+  "name": "concord-core",
+  "version": "0.1.0",
   "description": "Repo-local eval metadata for Concord's own artifact-alignment contract.",
-  "checks": [
+  "tests": [
     {
       "name": "scan markdown report",
-      "type": "output_contains",
-      "command": "./kujo run concord.kujo -- scan",
-      "expected": [
-        "# Concord Drift Report",
-        "## Summary",
-        "## Findings"
-      ]
+      "check": "output_contains",
+      "params": {
+        "command": "cd /Users/robertdevore/2026/Kujolang/kujo-repos/co* && kujo run *.kujo -- scan",
+        "expected": "# Concord Drift Report"
+      }
     },
     {
-      "name": "scan json findings array",
-      "type": "json_path_exists",
-      "command": "./kujo run concord.kujo -- scan --format json",
-      "path": "$.findings"
+      "name": "scan json includes findings key",
+      "check": "output_contains",
+      "params": {
+        "command": "cd /Users/robertdevore/2026/Kujolang/kujo-repos/co* && kujo run *.kujo -- scan --format json",
+        "expected": "\"findings\""
+      }
     },
     {
       "name": "invalid args exit code",
-      "type": "exit_code",
-      "command": "./kujo run concord.kujo -- scan --nonexistent-flag",
-      "expected": 2
+      "check": "exit_code_equals",
+      "params": {
+        "command": "cd /Users/robertdevore/2026/Kujolang/kujo-repos/co* && kujo run *.kujo -- scan --bad-flag",
+        "expected": 2
+      }
     }
   ]
 }

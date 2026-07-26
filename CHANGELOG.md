@@ -4,6 +4,7 @@ All notable changes to Concord are documented here.
 
 ## [Unreleased]
 
+- Added launch-readiness Spec/Eval updates for the Kujo prelaunch review.
 - Recognize Node, npm, npx, and Tribunal README command examples.
 - Parse `package.json` name and version values without retaining JSON field syntax, preventing false manifest and version drift.
 - Detect current Kujo Eval suites that use top-level `tests` and per-test `check` fields.

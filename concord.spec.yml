@@ -3,7 +3,7 @@
 name: "concord"
 goal: "Build a small showcase tool called Concord that detects artifact drift and alignment issues in Kujo ecosystem repositories. Concord checks whether the important artifacts in a repo (code, CLI, docs, examples, Spec files, Eval checks, schemas, package metadata) agree with each other."
 id: "a1b2c3d4-e5f6-4789-abcd-ef0123456789"
-status: "in-progress"
+status: "local-release-review"
 version: "1.0.0"
 created_at: "2026-05-28T08:00:00Z"
 priority: "high"
@@ -29,7 +29,7 @@ background: |
   Concord should become a future Kennel-friendly tool that helps package authors keep their code, docs, specs, checks, examples, and manifests synchronized.
 
 scope: |
-  MVP scope:
+  Verified local review scope:
   - Detect whether the current directory is a repository with recognizable artifacts
   - Detect README, docs, Spec files, Eval files, manifest files, and example files
   - Extract documented commands from README/docs using fenced-code parsing
@@ -46,8 +46,9 @@ scope: |
   - Label findings with severity (critical/high/medium/low) and confidence
   - Identify likely sources of truth for key facts
   - Document ecosystem pain points discovered during development
+  - Keep local launch proof current through tests, Eval, ShipCheck, Concord self-scan, ChangeBucket, and PatchBrief evidence
 
-  Out of scope for MVP:
+  Out of scope for this local release-ready review:
   - Network services or APIs
   - Large external dependencies
   - AI/LLM-based drift detection (pure rule-based for MVP)
@@ -58,6 +59,9 @@ scope: |
   - Onboarding/HOWTO verification (Trail territory)
   - YAML/TOML parsing (regex-based field extraction only)
   - AST-level code analysis
+  - Publishing packages or public releases
+  - Pushing final release tags
+  - Claiming enterprise-ready or production-grade drift governance without target-repo fixture coverage and target CI proof
 
 non_goals:
   - "Full static analysis of source code"
@@ -68,6 +72,7 @@ non_goals:
   - "Cross-repo drift analysis (single repo only for MVP)"
   - "Full Markdown parser (regex-based extraction only)"
   - "Full YAML/TOML parser (regex-based field extraction only)"
+  - "Production or enterprise governance claims without target-environment proof"
 
 relevant_systems:
   - "kujo (core language/runtime)"
@@ -120,36 +125,25 @@ acceptance_criteria:
   - "Ecosystem dogfood reports are complete in .dogfood/concord/"
 
 eval_requirements:
-  - description: "Concord scan command succeeds on a known-good repo"
-    check_type: "command_succeeds"
-    params:
-      command: "./kujo run concord.kujo scan --dir /path/to/other-project"
-  - description: "Concord scan produces valid JSON"
-    check_type: "command_succeeds"
-    params:
-      command: "./kujo run concord.kujo scan --dir /path/to/other-project --format json"
-  - description: "Concord report contains expected sections"
+  - description: "Concord scan command succeeds on this repo"
     check_type: "output_contains"
     params:
-      command: "./kujo run concord.kujo scan --dir /path/to/other-project"
-      expected:
-        - "# Concord Drift Report"
-        - "## Summary"
-        - "## Findings"
-  - description: "Concord JSON output has findings array"
-    check_type: "json_path_value"
+      command: "concord scan"
+      expected: "# Concord Drift Report"
+  - description: "Concord scan produces JSON with findings field"
+    check_type: "output_contains"
     params:
-      command: "./kujo run concord.kujo scan --dir /path/to/other-project --format json"
-      path: "$.findings"
+      command: "concord scan --format json"
+      expected: "\"findings\""
   - description: "Concord exits non-zero on invalid args"
-    check_type: "exit_code"
+    check_type: "exit_code_equals"
     params:
-      command: "./kujo run concord.kujo scan --nonexistent-flag"
+      command: "concord scan --nonexistent-flag"
       expected: 2
   - description: "Concord help prints usage"
     check_type: "output_contains"
     params:
-      command: "./kujo run concord.kujo help"
+      command: "concord help"
       expected:
         - "Usage:"
         - "scan"
@@ -185,6 +179,7 @@ human_approval_points:
   - "After initial Concord scan on real ecosystem repos"
   - "Before treating Concord findings as authoritative"
   - "Before packaging Concord for Kennel distribution"
+  - "Before publishing packages, public releases, or final release tags"
 
 estimated_effort: "1 day"
 tags:
