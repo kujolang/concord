@@ -9,9 +9,7 @@ export func is_git_repo(dir_path) {
 	if is_truthy(file_exists(git_dir)) == 0 {
 		return 0
 	}
-	if is_truthy(path_is_dir(git_dir)) == 0 {
-		return 0
-	}
+	# Git worktrees use a .git pointer file instead of a directory.
 	return 1
 }
 
@@ -244,10 +242,16 @@ export func extract_json_string_field(text, field_name) {
 }
 
 export func extract_fenced_commands(text) {
-	# Extract commands from fenced code blocks (```bash, ```sh, ```, etc.)
+	# Extract commands from fenced code blocks, including CRLF and rich info strings.
 	mut result := []
-	# Find all fenced code blocks
-	mut blocks := regex_find_all(text, "```[a-z]*\\n([\\s\\S]*?)```")
+	mut normalized := replace(text, "\\r\\n", "\\n")
+	mut blocks := regex_find_all(normalized, "```[^\\n]*\\n([\\s\\S]*?)```")
+	mut tilde_blocks := regex_find_all(normalized, "~~~[^\\n]*\\n([\\s\\S]*?)~~~")
+	mut t := 0
+	while t < len(tilde_blocks) {
+		blocks = push(blocks, tilde_blocks[t])
+		t = t + 1
+	}
 	mut i := 0
 	while i < len(blocks) {
 		block := blocks[i]
@@ -331,7 +335,7 @@ export func extract_yaml_field(text, field_name) {
 export func extract_toml_field(text, field_name) {
 	# Very simple regex-based field extraction from TOML
 	# Pattern: field_name = "value" or field_name = 'value'
-	mut pattern := field_name + "\\s*=\\s*[\"']([^\"']+)[\"']"
+	mut pattern := "(?:^|\\n)\\s*" + field_name + "\\s*=\\s*[\"']([^\"']+)[\"']"
 	mut matches := regex_find_all(text, pattern)
 	if len(matches) > 0 {
 		mut raw := trim_space(matches[0])
@@ -351,6 +355,45 @@ export func extract_toml_field(text, field_name) {
 		return raw
 	}
 	return ""
+}
+
+export func command_invokes_entry(command, entry_script) {
+	if entry_script == "" {
+		return 0
+	}
+	mut parts := split(entry_script, "/")
+	entry_name := parts[len(parts) - 1]
+	if is_truthy(contains(command, "kujo run " + entry_name)) == 1 { return 1 }
+	mut stem := entry_name
+	if is_truthy(ends_with(stem, ".kujo")) == 1 {
+		stem = substring(stem, 0, len(stem) - 5)
+	}
+	if is_truthy(starts_with(trim_space(command), stem + " ")) == 1 { return 1 }
+	return 0
+}
+
+export func strip_shell_quotes(value) {
+	mut clean := trim_space(value)
+	if len(clean) >= 2 {
+		mut first := substring(clean, 0, 1)
+		mut last := substring(clean, len(clean) - 1, len(clean))
+		if first == "\"" && last == "\"" {
+			return substring(clean, 1, len(clean) - 1)
+		}
+		if first == "'" && last == "'" {
+			return substring(clean, 1, len(clean) - 1)
+		}
+	}
+	return clean
+}
+
+export func option_reference_value(match_text) {
+	mut clean := trim_space(match_text)
+	space_at := index_of(clean, " ")
+	if space_at >= 0 {
+		clean = trim_space(substring(clean, space_at + 1, len(clean)))
+	}
+	return strip_shell_quotes(clean)
 }
 
 # --- CLI help extraction ---

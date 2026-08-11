@@ -2,7 +2,7 @@
 
 from src.common import read_file_safe, is_truthy
 from src.scanner import find_readme, find_example_files, extract_fenced_commands
-from src.scanner import find_cli_entry, get_cli_help_commands
+from src.scanner import find_cli_entry, get_cli_help_commands, option_reference_value
 
 export func check_example_validity(dir_path, kujo_bin) {
 	mut findings := []
@@ -38,10 +38,17 @@ export func check_example_validity(dir_path, kujo_bin) {
 		while i < len(readme_commands) {
 			cmd := readme_commands[i]
 			# Check for file references in commands (paths after flags like --dir, --output, -o, etc.)
-			mut file_refs := regex_find_all(cmd, "(?:--dir|--output|-o|--file|-f|--config|-c)\\s+(\\S+)")
+			mut file_refs := regex_find_all(cmd, "(?:--dir|--output|-o|--file|-f|--config|-c)\\s+(\"[^\"]+\"|'[^']+'|\\S+)")
 			mut j := 0
 			while j < len(file_refs) {
-				ref := file_refs[j]
+				ref := option_reference_value(file_refs[j])
+				# Output paths are destinations and are expected not to exist yet.
+				mut output_ref := is_truthy(starts_with(file_refs[j], "--output ")) == 1
+				if is_truthy(starts_with(file_refs[j], "-o ")) == 1 { output_ref = 1 }
+				if output_ref == 1 {
+					j = j + 1
+					continue
+				}
 				if is_truthy(starts_with(ref, "/path/to/")) == 1 {
 					j = j + 1
 					continue

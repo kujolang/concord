@@ -1,7 +1,7 @@
 # Concord — CLI ↔ Docs alignment checks
 
 from src.common import read_file_safe, is_truthy
-from src.scanner import find_readme, find_cli_entry, extract_fenced_commands, get_cli_help_commands, filter_unique
+from src.scanner import find_readme, find_cli_entry, extract_fenced_commands, get_cli_help_commands, filter_unique, command_invokes_entry
 
 export func check_cli_docs(dir_path, kujo_bin) {
 	mut findings := []
@@ -45,6 +45,10 @@ export func check_cli_docs(dir_path, kujo_bin) {
 			mut i := 0
 			while i < len(readme_commands) {
 				r_cmd := readme_commands[i]
+				if command_invokes_entry(r_cmd, entry_script) == 0 {
+					i = i + 1
+					continue
+				}
 				# Try to find the command in CLI help
 				mut found := 0
 				mut j := 0

@@ -4,9 +4,10 @@
 # current runtime, so this hand-rolled harness is used instead. It exercises the
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
-from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token
-from src.scanner import is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text
+from src.scanner import is_git_repo, is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, option_reference_value
 from src.checks.cli_docs import check_cli_docs
+from src.checks.example_validity import check_example_validity
 from src.reporter import generate_markdown_report, generate_json_report
 from src.fix_tasks import generate_fix_tasks
 
@@ -61,11 +62,18 @@ func test_common() {
 	]
 	check(highest_severity(findings1) == "high", "highest_severity finds highest in list")
 
+	mut critical_findings := [
+		{"severity": "critical", "title": "critical test"},
+	]
+	check(highest_severity(critical_findings) == "critical", "highest_severity preserves critical severity")
+	check(scan_exit_code(critical_findings) == 1, "scan_exit_code fails for critical findings")
+
 	mut findings2 := []
 	check(highest_severity(findings2) == "none", "highest_severity returns none for empty")
 
 	check(trim_space("  hello  ") == "hello", "trim_space works")
 	check(to_lowercase("HELLO") == "hello", "to_lowercase works")
+	check(extract_version_from_text("## v2.3.4") == "2.3.4", "extract_version_from_text normalizes a v prefix")
 }
 
 func test_scanner() {
@@ -87,6 +95,10 @@ func test_scanner() {
 	mut cmds := extract_fenced_commands(text1)
 	check(len(cmds) >= 1, "extract_fenced_commands finds kujo commands")
 
+	mut rich_fence := "```console title=CLI\r\nkujo run concord.kujo scan\r\n```\r\n~~~sh\nnpm test\n~~~"
+	mut rich_cmds := extract_fenced_commands(rich_fence)
+	check(len(rich_cmds) == 2, "extract_fenced_commands supports CRLF, info attributes, and tilde fences")
+
 	mut text2 := "![Version](https://img.shields.io/badge/version-1.0.0-blue)"
 	check(extract_badge_version(text2) == "1.0.0", "extract_badge_version finds version in badge")
 
@@ -96,6 +108,8 @@ func test_scanner() {
 	mut text4 := "name = \"concord\"\nversion = \"1.0.0\""
 	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
 	check(extract_toml_field(text4, "version") == "1.0.0", "extract_toml_field extracts version value")
+	mut misleading_toml := "display_name = \"Wrong\"\nname = \"Right\""
+	check(extract_toml_field(misleading_toml, "name") == "Right", "extract_toml_field matches the exact key")
 
 	mut text5 := "{\n  \"name\": \"@kujolang/tribunal\",\n  \"version\": \"0.1.0\"\n}"
 	check(extract_json_string_field(text5, "name") == "@kujolang/tribunal", "extract_json_string_field extracts scoped package name")
@@ -103,6 +117,13 @@ func test_scanner() {
 	check(looks_like_command("npm run build") == 1, "looks_like_command recognizes npm")
 	check(looks_like_command("node dist/src/cli.js help") == 1, "looks_like_command recognizes node")
 	check(looks_like_command("tribunal review docket.md") == 1, "looks_like_command recognizes standalone ecosystem CLIs")
+	check(command_invokes_entry("git clone example", "main.kujo") == 0, "command_invokes_entry rejects unrelated commands")
+	check(command_invokes_entry("kujo run main.kujo scan", "main.kujo") == 1, "command_invokes_entry recognizes Kujo entry commands")
+	check(option_reference_value("--config \"config file.toml\"") == "config file.toml", "option_reference_value extracts and unquotes paths")
+
+	create_dir(".concord-worktree-fixture")
+	write_file(".concord-worktree-fixture/.git", "gitdir: ../actual-worktree-git-dir\n")
+	check(is_git_repo(".concord-worktree-fixture") == 1, "is_git_repo recognizes worktree .git files")
 }
 
 func test_checks() {
@@ -116,6 +137,32 @@ func test_checks() {
 		i = i + 1
 	}
 	check(has_false_missing_readme == 0, "cli docs check does not falsely report missing README for this repo")
+
+	create_dir(".concord-cli-docs-fixture")
+	write_file(".concord-cli-docs-fixture/kujo.toml", "[project]\nname = \"fixture\"\nentry = \"main.kujo\"\n")
+	write_file(".concord-cli-docs-fixture/main.kujo", "if subcommand == \"scan\" { print(\"ok\") }\n")
+	write_file(".concord-cli-docs-fixture/README.md", "# Fixture\n\n```bash\ngit clone example\nnpm run build\nkujo run main.kujo scan\n```\n")
+	mut mixed_findings := check_cli_docs(".concord-cli-docs-fixture", "kujo")
+	check(len(mixed_findings) == 0, "cli docs check ignores commands for other tools")
+
+	create_dir(".concord-examples-fixture")
+	create_dir(".concord-examples-fixture/examples")
+	write_file(".concord-examples-fixture/examples/README.md", "fixture\n")
+	write_file(".concord-examples-fixture/config file.toml", "enabled = true\n")
+	write_file(".concord-examples-fixture/README.md", "# Fixture\n\n```bash\nkujo run main.kujo scan --config \"config file.toml\" --output reports/new.md --file missing.toml\n```\n")
+	mut example_findings := check_example_validity(".concord-examples-fixture", "kujo")
+	mut missing_path_findings := 0
+	mut missing_target := ""
+	mut ef := 0
+	while ef < len(example_findings) {
+		if is_truthy(starts_with(example_findings[ef]["id"], "examples-missing-file-")) == 1 {
+			missing_path_findings = missing_path_findings + 1
+			missing_target = example_findings[ef]["target_artifact"]
+		}
+		ef = ef + 1
+	}
+	check(missing_path_findings == 1, "example validity checks input paths but not output destinations")
+	check(missing_target == "missing.toml", "example validity extracts the missing input path")
 
 	mut clean := []
 	check(verification_exit_code(clean) == 0, "verification_exit_code returns zero for clean results")
@@ -160,6 +207,12 @@ func test_reporter() {
 	check(contains(report, "## Summary") == 1, "generate_markdown_report includes summary section")
 	check(contains(report, "## Findings") == 1, "generate_markdown_report includes findings section")
 	check(contains(report, "Test finding") == 1, "generate_markdown_report includes finding title")
+	mut table_findings := findings
+	table_findings[0]["source_artifact"] = "left|right\nnext"
+	mut table_report := generate_markdown_report(".", table_findings)
+	check(contains(table_report, "left\\|right<br>next") == 1, "generate_markdown_report escapes table cell content")
+	mut table_tasks := generate_fix_tasks(table_findings)
+	check(contains(table_tasks, "left\\|right<br>next") == 1, "generate_fix_tasks escapes table cell content")
 
 	mut empty_findings := []
 	mut empty_report := generate_markdown_report(".", empty_findings)
