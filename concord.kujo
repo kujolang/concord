@@ -269,16 +269,7 @@ func print_check_argument_usage() {
 	])
 }
 
-func print_check_finding(f) {
-	print_lines([
-		"[" + f["severity"] + "] " + f["title"],
-		"  " + f["summary"],
-		"  Suggested: " + f["suggested_fix"],
-		""
-	])
-}
-
-func handle_check(dir_path, kujo_bin, format, rest) {
+func handle_check(dir_path, kujo_bin, format, output_path, rest) {
 	category := get_check_category(rest)
 	if category == "" {
 		print_check_argument_usage()
@@ -290,19 +281,23 @@ func handle_check(dir_path, kujo_bin, format, rest) {
 	}
 	mut findings := run_check_category(category, dir_path, kujo_bin)
 
+	mut check_output := ""
 	if format == "json" {
-		print(to_json_pretty(findings))
+		check_output = to_json_pretty(findings)
 	} else {
 		mut i := 0
 		while i < len(findings) {
 			f := findings[i]
-			print_check_finding(f)
+			check_output = check_output + "[" + f["severity"] + "] " + f["title"] + "\n"
+			check_output = check_output + "  " + f["summary"] + "\n"
+			check_output = check_output + "  Suggested: " + f["suggested_fix"] + "\n\n"
 			i = i + 1
 		}
 		if len(findings) == 0 {
-			print("No findings for category: " + category)
+			check_output = "No findings for category: " + category
 		}
 	}
+	write_or_print(output_path, "Report written to: ", check_output)
 	return verification_exit_code(findings)
 }
 
@@ -398,7 +393,7 @@ func main() {
 	}
 
 	if subcommand == "check" {
-		exit(handle_check(dir_path, kujo_bin, format, rest))
+		exit(handle_check(dir_path, kujo_bin, format, output_path, rest))
 	}
 
 	if subcommand == "report" {
