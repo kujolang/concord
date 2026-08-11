@@ -20,7 +20,9 @@ func severity_emoji(severity) {
 }
 
 func field_row(label, value) {
-	return "| **" + label + "** | " + value + " |"
+	mut clean := replace(to_string(value), "|", "\\|")
+	clean = replace(clean, "\n", "<br>")
+	return "| **" + label + "** | " + clean + " |"
 }
 
 export func generate_fix_tasks(findings) {

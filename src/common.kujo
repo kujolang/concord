@@ -98,7 +98,8 @@ export func verification_exit_code(findings) {
 }
 
 export func scan_exit_code(findings) {
-	if highest_severity(findings) == "high" {
+	overall := highest_severity(findings)
+	if overall == "high" || overall == "critical" {
 		return 1
 	}
 	return 0
@@ -110,7 +111,11 @@ export func extract_version_from_text(text) {
 	# Try to find a version pattern like 1.0.0 or v1.0.0
 	mut matches := regex_find_all(text, "v?([0-9]+\\.[0-9]+\\.[0-9]+)")
 	if len(matches) > 0 {
-		return matches[0]
+		value := matches[0]
+		if is_truthy(starts_with(value, "v")) == 1 {
+			return substring(value, 1, len(value))
+		}
+		return value
 	}
 	return ""
 }
@@ -136,7 +141,8 @@ export func highest_severity(findings) {
 		}
 		i = i + 1
 	}
-	if max_weight >= 3 { return "high" }
+	if max_weight == 4 { return "critical" }
+	if max_weight == 3 { return "high" }
 	if max_weight == 2 { return "medium" }
 	if max_weight == 1 { return "low" }
 	return "none"
