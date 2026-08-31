@@ -40,7 +40,7 @@ kujo run concord.kujo -- tasks
 kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
-Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README blocks. JavaScript package names and versions are parsed as JSON string values before manifest and version comparisons.
+Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README blocks. It compares documented Kujo subcommands with explicit subcommand dispatch in the configured CLI entry source without executing repository code. JavaScript package names and versions are parsed as JSON string values before manifest and version comparisons.
 
 ## Commands
 
@@ -48,7 +48,7 @@ Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standal
 |---------|-------------|
 | `scan` | Run all drift checks and produce a full report |
 | `check <category>` | Run a specific check category and exit `3` when findings are present |
-| `report` | Generate an artifact report from the last scan |
+| `report` | Run all checks and generate an artifact report |
 | `tasks` | Generate follow-up fix task cards from scan findings |
 | `version` | Print version information |
 | `help` | Print usage information |
@@ -90,6 +90,7 @@ Use `scan`/`check` to find drift; use `report`/`tasks` to export findings and fo
 
 - Kujo runtime available as `kujo` on `PATH`
 - Run inside a project directory (git repo recommended)
+- `jq` for the optional continuous-loop workflow
 
 ## Readiness Posture
 
@@ -113,6 +114,7 @@ Known maturity boundaries:
 
 ```bash
 kujo test
+bash tests/continuous_loop_tests.sh
 ```
 
 ## Contributor and Agent Notes
@@ -151,6 +153,9 @@ scripts/concord_continuous_loop.sh --iterations 0 --sleep-seconds 600
 
 # Strict mode for CI-style gating
 scripts/concord_continuous_loop.sh --iterations 1 --strict-gate
+
+# Bound retained trend history (default: 10,000 rows; 0 keeps all rows)
+scripts/concord_continuous_loop.sh --iterations 1 --trend-max-records 5000
 ```
 
 Artifacts are written under `.dogfood/concord/loop/`:
@@ -159,6 +164,8 @@ Artifacts are written under `.dogfood/concord/loop/`:
 - `.dogfood/concord/loop/trend/scan-trend.jsonl`
 - `.dogfood/concord/loop/trend/latest-summary.md`
 - `.dogfood/concord/loop/upstream-issue-drafts.md`
+
+Each cycle uses a unique run directory, artifact names are collision-safe within a repository matrix, and high-severity findings remain normal scan results rather than being mislabeled as scan failures. The trend JSONL is bounded to 10,000 rows by default; use `--trend-max-records 0` only when unbounded retention is intentional.
 
 ## Project Structure
 
