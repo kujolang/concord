@@ -5,7 +5,7 @@
 - Repository: `concord`
 - Branch: `main`
 - Starting SHA: `8d5ee11e0035ad7469aabe2fa8eb887d1c593c1f`
-- Ending implementation SHA: `da3fe4462d52cddd39a0c989e6adaae6c4116cfb`
+- Ending implementation SHA: `47fca607da1fceb35b5d036bf34cf39f8902deb3`
 - Purpose: local, rule-based drift detection across repository CLI, documentation, Spec, Eval, manifest, version, example, and source-of-truth artifacts.
 - Important dependencies and integrations: Kujo runtime, optional Git repository metadata, `jq` plus standard shell utilities for the continuous loop, Kennel manifests, Kujo Spec, and Kujo Eval metadata. The scanner has no network or AI dependency and does not execute target-repository code.
 
@@ -40,6 +40,10 @@ Relevant measured dimensions were CLI behavior, loop result integrity, output fa
 | CON-HARD-007 | P2 | Determinism | Repositories with the same basename could overwrite each other's scan, task, and check artifacts; cycles in the same second could reuse a run directory. | Artifact paths used only `basename`; run paths used second-resolution timestamps. | Prefix artifacts with matrix position and create unique run directories. | Fixed and regression-tested |
 | CON-HARD-008 | P2 | Documentation | `report` claimed to use a previous scan although it reruns all checks, and CLI/docs comparison was described as parsing executed help output although it reads source. | README/help wording differed from implementation. | Correct the command and scanner descriptions and document loop bounds and tests. | Fixed |
 | CON-HARD-009 | P2 | CI | The shell workflow had no repository-local regression test in CI. | Existing workflow only guarded generated artifact commits. | Add a deterministic fake-runtime loop test and run it in GitHub Actions. | Fixed |
+| CON-HARD-010 | P2 | Discovery | Nested docs, Eval files, and examples were not consistently discovered. | Representative nested fixtures were invisible to the previous one-level directory scans. | Add deterministic recursive discovery bounded by depth, file count, entry count, canonical-root containment, and artifact size. | Fixed and regression-tested |
+| CON-HARD-011 | P1 | Resource safety | Concord had no product-level artifact size budget below the runtime's 8 MiB file-I/O ceiling. | A Kujo ecosystem sample of up to 5,000 relevant paths had a 44,109-byte maximum; unrestricted regex input had no Concord-specific bound. | Set a 1 MiB text-artifact limit and emit high-severity incomplete-scan findings instead of reading or truncating oversized input. | Fixed and regression-tested |
+| CON-HARD-012 | P2 | Parser precision | JSON metadata used regex extraction, while simple YAML/TOML extraction mishandled delimiter-bearing quoted values and some inline comments. | Fixtures with URLs, equals signs, nested JSON keys, suffix keys, and comments exposed ambiguous behavior. | Use structured JSON parsing and exact-key, line-aware scalar parsing for the deliberately supported YAML/TOML subset. | Fixed and regression-tested |
+| CON-HARD-013 | P3 | Maintainability | Reporter and task-card modules duplicated Markdown assembly and severity rendering helpers. | Identical helper implementations existed in both modules. | Consolidate rendering helpers in `src/common.kujo`. | Fixed |
 
 ## Changes Implemented
 
@@ -80,6 +84,8 @@ Relevant measured dimensions were CLI behavior, loop result integrity, output fa
 | Output-write failure | Multi-line VM stack trace | One-line actionable error | Lower default error volume |
 | One-shot scan wall time | Markdown 2.37 s; JSON 2.23 s | Post-change observed 2.35–2.60 s in repeated JSON runs; verification samples varied up to 2.80 s | No runtime speedup claimed; safeguards add small work and wrapper/compiler variance dominates |
 | Dependencies | Kujo; optional Git; shell/`jq` for loop | Unchanged | No dependency growth |
+| Recursive discovery | One directory level; no explicit product bounds | Depth 4, 256 matching files, 2,048 visited entries per root, canonical-root containment | Bounded nested coverage |
+| Text artifact size | Runtime-only 8 MiB ceiling | Concord-specific 1 MiB limit with explicit findings | Bounded regex/parser input |
 
 No token/context benchmark applies: Concord contains no model integration, prompt, MCP schema, or agent-message loop. Documentation remains progressive and command-focused.
 
@@ -114,10 +120,12 @@ No new cross-repository change is required for this hardening pass. Existing eco
 
 - **P0:** none known.
 - **P1:** none known.
-- **P2:** consider recursive, bounded discovery for nested docs/examples only after representative target-repository fixtures establish expected behavior.
-- **P3:** consider consolidating duplicated Markdown assembly helpers if Kujo gains importable non-function constants and the change remains clear.
-- **Needs more evidence:** maximum target artifact size, acceptable regex false-positive rate, and whether structured YAML/TOML parsing would justify dependency or runtime cost.
+- **P2:** none known.
+- **P3:** none known.
+- **Needs more evidence:** none currently actionable.
 - **Not worth changing:** caching repeated reads in the current small, single-process scanner without evidence that file I/O, rather than Kujo startup/compilation, is the bottleneck.
+
+The earlier open items were closed in commit `47fca60`: representative fixtures now cover recursive discovery and parser edge cases; ecosystem artifact measurements support a 1 MiB cap with substantial headroom; JSON uses the runtime's structured parser; and the intentionally narrow YAML/TOML scalar contract avoids a new dependency. Full-language YAML/TOML parsing is outside Concord's declared scope rather than unresolved work.
 
 ## Verification Receipt
 
@@ -132,5 +140,7 @@ No new cross-repository change is required for this hardening pass. Existing eco
 | Missing output-parent integration check | Exit 2; concise error; passed expected behavior |
 | `bash .github/scripts/check-kujo-tool-artifacts.sh HEAD~1 HEAD` | Passed |
 | `git diff --check` | Passed |
+
+Follow-up completion also passed nested docs/examples, discovery-depth, oversized-artifact, exact-key, inline-comment, quoted-delimiter, and top-level JSON regression fixtures in `tests/concord_tests.kujo`.
 
 The final verification after this report commit reruns the same repository tests and scans; the engineering receipt records the final SHA and push state.
