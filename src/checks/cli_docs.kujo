@@ -1,7 +1,7 @@
 # Concord — CLI ↔ Docs alignment checks
 
 from src.common import read_file_safe, is_truthy
-from src.scanner import find_readme, find_cli_entry, extract_fenced_commands, get_cli_help_commands, filter_unique, command_invokes_entry
+from src.scanner import find_readme, find_cli_entry, extract_fenced_commands, get_cli_help_commands, command_invokes_entry, command_has_token
 
 export func check_cli_docs(dir_path, kujo_bin) {
 	mut findings := []
@@ -53,7 +53,7 @@ export func check_cli_docs(dir_path, kujo_bin) {
 				mut found := 0
 				mut j := 0
 				while j < len(cli_commands) {
-					if is_truthy(contains(r_cmd, cli_commands[j])) == 1 {
+					if command_has_token(r_cmd, cli_commands[j]) == 1 {
 						found = 1
 						break
 					}
@@ -66,12 +66,12 @@ export func check_cli_docs(dir_path, kujo_bin) {
 						"severity": "high",
 						"confidence": "medium",
 						"category": "cli-docs-alignment",
-						"title": "Documented command not found in CLI help",
-						"summary": "README documents a command that does not appear in CLI help output.",
+						"title": "Documented command not found in CLI source",
+						"summary": "README documents a command that does not appear in the CLI command dispatch source.",
 						"source_artifact": readme_path,
 						"target_artifact": entry_script,
-						"expected": "Commands in README should be discoverable in CLI help.",
-						"actual": "Command '" + r_cmd + "' was found in README but not in CLI help.",
+						"expected": "Commands in README should match a command defined by the CLI entry point.",
+						"actual": "Command '" + r_cmd + "' was found in README but not in CLI source.",
 						"suggested_fix": "Update README to use current commands, or add missing CLI command.",
 						"human_review_required": true
 					})
@@ -105,17 +105,17 @@ export func check_cli_docs(dir_path, kujo_bin) {
 	if has_entry == 1 {
 		if no_cli_cmds == 1 {
 			findings = push(findings, {
-				"id": "cli-docs-help-parse-failed",
+				"id": "cli-docs-source-parse-failed",
 				"severity": "low",
 				"confidence": "medium",
 				"category": "cli-docs-alignment",
-				"title": "Could not parse CLI help output",
-				"summary": "The CLI entry point exists but help output could not be parsed for commands.",
+				"title": "Could not parse CLI command source",
+				"summary": "The CLI entry point exists but command dispatch source could not be parsed.",
 				"source_artifact": entry_script,
 				"target_artifact": "(none)",
-				"expected": "CLI help should be parseable for command names.",
-				"actual": "CLI help output could not be parsed.",
-				"suggested_fix": "Ensure CLI help output follows standard formatting conventions.",
+				"expected": "CLI command dispatch should be parseable for command names.",
+				"actual": "No supported command dispatch comparisons were found.",
+				"suggested_fix": "Use explicit subcommand comparisons or extend Concord's source parser.",
 				"human_review_required": false
 			})
 		}

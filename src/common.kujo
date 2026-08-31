@@ -73,6 +73,41 @@ export func to_lowercase(s) {
 	return to_lower(s)
 }
 
+# Render repository- and argument-controlled text without terminal control bytes.
+# JSON output intentionally preserves original values and relies on JSON escaping.
+export func sanitize_terminal_text(value) {
+	mut text := to_string(value)
+	mut terminal_controls := parse_json("[\"\\u0007\",\"\\u0008\",\"\\u0009\",\"\\u000a\",\"\\u000b\",\"\\u000c\",\"\\u000d\",\"\\u000e\",\"\\u000f\",\"\\u001b\",\"\\u007f\"]")
+	mut terminal_escapes := ["\\u0007", "\\u0008", "\\u0009", "\\u000a", "\\u000b", "\\u000c", "\\u000d", "\\u000e", "\\u000f", "\\u001b", "\\u007f"]
+	mut i := 0
+	while i < len(terminal_controls) {
+		text = replace(text, to_string(terminal_controls[i]), to_string(terminal_escapes[i]))
+		i = i + 1
+	}
+	return text
+}
+
+export func markdown_text(value) {
+	mut text := sanitize_terminal_text(value)
+	text = replace(text, "\\", "\\\\")
+	mut markdown_escapes := ["`", "[", "]", "<", ">", "(", ")", "!"]
+	mut i := 0
+	while i < len(markdown_escapes) {
+		char := to_string(markdown_escapes[i])
+		text = replace(text, char, "\\" + char)
+		i = i + 1
+	}
+	return text
+}
+
+export func markdown_code(value) {
+	mut text := sanitize_terminal_text(value)
+	text = replace(text, "&", "&amp;")
+	text = replace(text, "<", "&lt;")
+	text = replace(text, ">", "&gt;")
+	return "<code>" + text + "</code>"
+}
+
 # --- File helpers ---
 
 export func read_file_safe(path) {

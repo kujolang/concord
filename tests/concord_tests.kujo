@@ -4,8 +4,8 @@
 # current runtime, so this hand-rolled harness is used instead. It exercises the
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
-from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text
-from src.scanner import is_git_repo, is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, option_reference_value
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text, sanitize_terminal_text, markdown_text, markdown_code
+from src.scanner import is_git_repo, is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, command_has_token, option_reference_value
 from src.checks.cli_docs import check_cli_docs
 from src.checks.example_validity import check_example_validity
 from src.reporter import generate_markdown_report, generate_json_report
@@ -74,6 +74,15 @@ func test_common() {
 	check(trim_space("  hello  ") == "hello", "trim_space works")
 	check(to_lowercase("HELLO") == "hello", "to_lowercase works")
 	check(extract_version_from_text("## v2.3.4") == "2.3.4", "extract_version_from_text normalizes a v prefix")
+
+	mut escape_text := parse_json("\"\\u001b[31mwarning\"")
+	mut safe_terminal := sanitize_terminal_text(escape_text)
+	check(contains(safe_terminal, escape_text) == 0, "sanitize_terminal_text removes terminal escape bytes")
+	check(contains(safe_terminal, "u001b") == 1, "sanitize_terminal_text makes terminal escapes visible")
+	mut safe_markdown := markdown_text("line one\n## injected`<tag>")
+	check(contains(safe_markdown, "\n") == 0, "markdown_text removes structural newlines")
+	check(contains(safe_markdown, "\\u000a") == 1, "markdown_text exposes structural newlines visibly")
+	check(contains(markdown_code("bad`<tag>"), "&lt;tag&gt;") == 1, "markdown_code escapes HTML tag boundaries")
 }
 
 func test_scanner() {
@@ -104,6 +113,8 @@ func test_scanner() {
 
 	mut text3 := "name: \"concord\"\nversion: \"1.0.0\""
 	check(extract_yaml_field(text3, "name") == "concord", "extract_yaml_field extracts simple field")
+	mut misleading_yaml := "display_name: Wrong\nname: Right"
+	check(extract_yaml_field(misleading_yaml, "name") == "Right", "extract_yaml_field matches the exact key")
 
 	mut text4 := "name = \"concord\"\nversion = \"1.0.0\""
 	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
@@ -119,6 +130,9 @@ func test_scanner() {
 	check(looks_like_command("tribunal review docket.md") == 1, "looks_like_command recognizes standalone ecosystem CLIs")
 	check(command_invokes_entry("git clone example", "main.kujo") == 0, "command_invokes_entry rejects unrelated commands")
 	check(command_invokes_entry("kujo run main.kujo scan", "main.kujo") == 1, "command_invokes_entry recognizes Kujo entry commands")
+	check(command_invokes_entry("kujo run main.kujo.bak scan", "main.kujo") == 0, "command_invokes_entry requires an exact entry filename")
+	check(command_has_token("kujo run main.kujo scan", "scan") == 1, "command_has_token finds an exact command token")
+	check(command_has_token("kujo run main.kujo rescan", "scan") == 0, "command_has_token rejects substring matches")
 	check(option_reference_value("--config \"config file.toml\"") == "config file.toml", "option_reference_value extracts and unquotes paths")
 
 	create_dir(".concord-worktree-fixture")
@@ -210,9 +224,9 @@ func test_reporter() {
 	mut table_findings := findings
 	table_findings[0]["source_artifact"] = "left|right\nnext"
 	mut table_report := generate_markdown_report(".", table_findings)
-	check(contains(table_report, "left\\|right<br>next") == 1, "generate_markdown_report escapes table cell content")
+	check(contains(table_report, "left\\|right\\\\u000anext") == 1, "generate_markdown_report escapes table cell content")
 	mut table_tasks := generate_fix_tasks(table_findings)
-	check(contains(table_tasks, "left\\|right<br>next") == 1, "generate_fix_tasks escapes table cell content")
+	check(contains(table_tasks, "left\\|right\\\\u000anext") == 1, "generate_fix_tasks escapes table cell content")
 
 	mut empty_findings := []
 	mut empty_report := generate_markdown_report(".", empty_findings)

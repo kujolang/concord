@@ -1,6 +1,6 @@
 # Concord — Fix task card generation
 
-from src.common import severity_weight, concord_version
+from src.common import severity_weight, concord_version, markdown_code, markdown_text
 
 func append_lines(text, lines) {
 	mut result := text
@@ -20,8 +20,8 @@ func severity_emoji(severity) {
 }
 
 func field_row(label, value) {
-	mut clean := replace(to_string(value), "|", "\\|")
-	clean = replace(clean, "\n", "<br>")
+	mut clean := markdown_text(value)
+	clean = replace(clean, "|", "\\|")
 	return "| **" + label + "** | " + clean + " |"
 }
 
@@ -99,31 +99,31 @@ export func generate_fix_tasks(findings) {
 		f := ordered[idx]
 
 		report = append_lines(report, [
-			"### Task " + to_string(task_num) + ": " + severity_emoji(f["severity"]) + " " + f["title"],
+			"### Task " + to_string(task_num) + ": " + severity_emoji(f["severity"]) + " " + markdown_text(f["title"]),
 			"",
 			"| Field | Value |",
 			"|-------|-------|",
-			field_row("Finding ID", "`" + f["id"] + "`"),
+			field_row("Finding ID", f["id"]),
 			field_row("Severity", f["severity"]),
 			field_row("Confidence", f["confidence"]),
 			field_row("Category", f["category"]),
 			field_row("Human Review", to_string(f["human_review_required"])),
 			"",
-			"**Problem:** " + f["summary"],
+			"**Problem:** " + markdown_text(f["summary"]),
 			"",
 			"**Affected Files:**",
-			"- `" + f["source_artifact"] + "`"
+			"- " + markdown_code(f["source_artifact"])
 		])
 		if f["target_artifact"] != "(none)" {
 			if f["target_artifact"] != "(multiple)" {
 				report = append_lines(report, [
-					"- `" + f["target_artifact"] + "`"
+					"- " + markdown_code(f["target_artifact"])
 				])
 			}
 		}
 		report = append_lines(report, [
 			"",
-			"**Suggested Fix:** " + f["suggested_fix"],
+			"**Suggested Fix:** " + markdown_text(f["suggested_fix"]),
 			"",
 			"**Validation:** Run `concord scan` after applying the fix to verify drift is resolved.",
 			"",

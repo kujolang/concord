@@ -1,6 +1,6 @@
 # Concord — Report generation (Markdown and JSON)
 
-from src.common import severity_weight, highest_severity, concord_version
+from src.common import highest_severity, concord_version, markdown_code, markdown_text
 
 func append_lines(text, lines) {
 	mut result := text
@@ -30,8 +30,8 @@ func severity_emoji(severity) {
 }
 
 func field_row(label, value) {
-	mut clean := replace(to_string(value), "|", "\\|")
-	clean = replace(clean, "\n", "<br>")
+	mut clean := markdown_text(value)
+	clean = replace(clean, "|", "\\|")
 	return "| **" + label + "** | " + clean + " |"
 }
 
@@ -41,7 +41,7 @@ export func generate_markdown_report(dir_path, findings) {
 	report = append_lines(report, [
 		"# Concord Drift Report",
 		"",
-		"**Concord v" + version + "** | **Directory:** `" + dir_path + "`",
+		"**Concord v" + version + "** | **Directory:** " + markdown_code(dir_path),
 		"",
 		"---",
 		""
@@ -130,7 +130,7 @@ export func generate_markdown_report(dir_path, findings) {
 
 			# Category header
 			report = append_lines(report, [
-				"### " + category_label(cat),
+				"### " + markdown_text(category_label(cat)),
 				""
 			])
 
@@ -139,24 +139,24 @@ export func generate_markdown_report(dir_path, findings) {
 				finding := cat_findings[f]
 
 				report = append_lines(report, [
-					"#### " + severity_emoji(finding["severity"]) + " " + finding["title"],
+					"#### " + severity_emoji(finding["severity"]) + " " + markdown_text(finding["title"]),
 					"",
 					"| Field | Value |",
 					"|-------|-------|",
-					field_row("ID", "`" + finding["id"] + "`"),
+					field_row("ID", finding["id"]),
 					field_row("Severity", finding["severity"]),
 					field_row("Confidence", finding["confidence"]),
-					field_row("Source", "`" + finding["source_artifact"] + "`"),
-					field_row("Target", "`" + finding["target_artifact"] + "`"),
+					field_row("Source", finding["source_artifact"]),
+					field_row("Target", finding["target_artifact"]),
 					field_row("Review Required", to_string(finding["human_review_required"])),
 					"",
-					"**Summary:** " + finding["summary"],
+					"**Summary:** " + markdown_text(finding["summary"]),
 					"",
-					"**Expected:** " + finding["expected"],
+					"**Expected:** " + markdown_text(finding["expected"]),
 					"",
-					"**Actual:** " + finding["actual"],
+					"**Actual:** " + markdown_text(finding["actual"]),
 					"",
-					"**Suggested Fix:** " + finding["suggested_fix"],
+					"**Suggested Fix:** " + markdown_text(finding["suggested_fix"]),
 					"",
 					"---",
 					""
