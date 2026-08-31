@@ -5,7 +5,7 @@
 - Repository: `concord`
 - Branch: `main`
 - Starting SHA: `8d5ee11e0035ad7469aabe2fa8eb887d1c593c1f`
-- Ending implementation SHA: `47fca607da1fceb35b5d036bf34cf39f8902deb3`
+- Ending implementation SHA: `1781be5b8bc82b026b106868d8d7b464a63907be`
 - Purpose: local, rule-based drift detection across repository CLI, documentation, Spec, Eval, manifest, version, example, and source-of-truth artifacts.
 - Important dependencies and integrations: Kujo runtime, optional Git repository metadata, `jq` plus standard shell utilities for the continuous loop, Kennel manifests, Kujo Spec, and Kujo Eval metadata. The scanner has no network or AI dependency and does not execute target-repository code.
 
@@ -125,7 +125,7 @@ No new cross-repository change is required for this hardening pass. Existing eco
 - **Needs more evidence:** none currently actionable.
 - **Not worth changing:** caching repeated reads in the current small, single-process scanner without evidence that file I/O, rather than Kujo startup/compilation, is the bottleneck.
 
-The earlier open items were closed in commit `47fca60`: representative fixtures now cover recursive discovery and parser edge cases; ecosystem artifact measurements support a 1 MiB cap with substantial headroom; JSON uses the runtime's structured parser; and the intentionally narrow YAML/TOML scalar contract avoids a new dependency. Full-language YAML/TOML parsing is outside Concord's declared scope rather than unresolved work.
+The earlier open items were closed in commits `47fca60` and `1781be5`: representative fixtures now cover recursive discovery and parser edge cases; ecosystem artifact measurements support a 1 MiB cap with substantial headroom; JSON uses the runtime's structured parser; iterative traversal keeps discovery bounded without recursive state growth; and the intentionally narrow YAML/TOML scalar contract avoids a new dependency. Full-language YAML/TOML parsing is outside Concord's declared scope rather than unresolved work.
 
 ## Verification Receipt
 
