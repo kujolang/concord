@@ -40,7 +40,9 @@ kujo run concord.kujo -- tasks
 kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
-Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README blocks. It compares documented Kujo subcommands with explicit subcommand dispatch in the configured CLI entry source without executing repository code. JavaScript package names and versions are parsed as JSON string values before manifest and version comparisons.
+Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README and recursively discovered docs blocks. It compares documented Kujo subcommands with explicit subcommand dispatch in the configured CLI entry source without executing repository code. JavaScript package metadata uses structured JSON parsing; supported YAML/TOML metadata uses exact-key, line-aware scalar extraction.
+
+Recursive docs, Eval, and example discovery is deterministic and bounded to depth 4, 256 matching files, and 2,048 visited directory entries per discovery root. Canonical path checks prevent traversal through symlinks outside that root. Text artifacts larger than 1 MiB are reported as high-severity incomplete-scan findings instead of being read or silently truncated.
 
 ## Commands
 
@@ -105,7 +107,8 @@ Current strengths:
 
 Known maturity boundaries:
 
-- YAML/TOML/Markdown extraction is regex-based by design
+- YAML/TOML support intentionally covers exact-key scalar metadata rather than the full languages
+- Markdown command extraction is fenced-block and convention based
 - Findings are drift leads for review, not proof of correctness
 - The default scan is single-repo and convention-oriented
 - Enterprise rollout should add policy configuration, larger fixture suites, and clearer output safety rules
@@ -181,6 +184,7 @@ src/
   common.kujo             # Shared utilities (arg parsing, string helpers)
   scanner.kujo            # Artifact discovery and file detection
   checks/
+    shared.kujo           # Shared bounded-artifact findings
     cli_docs.kujo         # CLI ↔ Docs alignment checks
     spec_eval.kujo        # Spec ↔ Eval alignment checks
     manifest_docs.kujo    # Manifest ↔ Docs alignment checks

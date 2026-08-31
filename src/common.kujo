@@ -108,13 +108,60 @@ export func markdown_code(value) {
 	return "<code>" + text + "</code>"
 }
 
+export func append_lines(text, lines) {
+	mut result := text
+	mut i := 0
+	while i < len(lines) {
+		result = result + lines[i] + "\n"
+		i = i + 1
+	}
+	return result
+}
+
+export func severity_emoji(severity) {
+	if severity == "critical" { return "🔴" }
+	if severity == "high" { return "🟠" }
+	if severity == "medium" { return "🟡" }
+	return "🔵"
+}
+
+export func markdown_field_row(label, value) {
+	mut clean := markdown_text(value)
+	clean = replace(clean, "|", "\\|")
+	return "| **" + label + "** | " + clean + " |"
+}
+
 # --- File helpers ---
+
+export func scan_artifact_limit_bytes() {
+	# Representative Kujo ecosystem artifacts measured below 50 KiB during the
+	# 2026-08 hardening audit. One MiB preserves ample headroom while bounding
+	# regex input and staying well below the runtime's eight MiB file-I/O cap.
+	return 1048576
+}
+
+export func artifact_exceeds_scan_limit(path) {
+	if is_truthy(file_exists(path)) == 0 { return 0 }
+	if is_truthy(path_is_dir(path)) == 1 { return 0 }
+	try {
+		return file_size(path) > scan_artifact_limit_bytes()
+	} except err {
+		return 1
+	}
+}
 
 export func read_file_safe(path) {
 	if is_truthy(file_exists(path)) == 0 {
 		return ""
 	}
-	return read_file(path)
+	if artifact_exceeds_scan_limit(path) == 1 {
+		return ""
+	}
+	try {
+		return read_file(path)
+	} except err {
+		return ""
+	}
 }
 
 export func file_has_extension(path, ext) {

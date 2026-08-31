@@ -1,16 +1,6 @@
 # Concord — Report generation (Markdown and JSON)
 
-from src.common import highest_severity, concord_version, markdown_code, markdown_text
-
-func append_lines(text, lines) {
-	mut result := text
-	mut i := 0
-	while i < len(lines) {
-		result = result + lines[i] + "\n"
-		i = i + 1
-	}
-	return result
-}
+from src.common import highest_severity, concord_version, markdown_code, markdown_text, append_lines, severity_emoji, markdown_field_row
 
 func category_label(cat) {
 	if cat == "cli-docs-alignment" { return "CLI ↔ Docs Alignment" }
@@ -20,19 +10,6 @@ func category_label(cat) {
 	if cat == "example-validity" { return "Example Validity" }
 	if cat == "source-of-truth" { return "Source of Truth" }
 	return cat
-}
-
-func severity_emoji(severity) {
-	if severity == "critical" { return "🔴" }
-	if severity == "high" { return "🟠" }
-	if severity == "medium" { return "🟡" }
-	return "🔵"
-}
-
-func field_row(label, value) {
-	mut clean := markdown_text(value)
-	clean = replace(clean, "|", "\\|")
-	return "| **" + label + "** | " + clean + " |"
 }
 
 export func generate_markdown_report(dir_path, findings) {
@@ -143,12 +120,12 @@ export func generate_markdown_report(dir_path, findings) {
 					"",
 					"| Field | Value |",
 					"|-------|-------|",
-					field_row("ID", finding["id"]),
-					field_row("Severity", finding["severity"]),
-					field_row("Confidence", finding["confidence"]),
-					field_row("Source", finding["source_artifact"]),
-					field_row("Target", finding["target_artifact"]),
-					field_row("Review Required", to_string(finding["human_review_required"])),
+					markdown_field_row("ID", finding["id"]),
+					markdown_field_row("Severity", finding["severity"]),
+					markdown_field_row("Confidence", finding["confidence"]),
+					markdown_field_row("Source", finding["source_artifact"]),
+					markdown_field_row("Target", finding["target_artifact"]),
+					markdown_field_row("Review Required", to_string(finding["human_review_required"])),
 					"",
 					"**Summary:** " + markdown_text(finding["summary"]),
 					"",

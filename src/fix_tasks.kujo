@@ -1,29 +1,6 @@
 # Concord — Fix task card generation
 
-from src.common import severity_weight, concord_version, markdown_code, markdown_text
-
-func append_lines(text, lines) {
-	mut result := text
-	mut i := 0
-	while i < len(lines) {
-		result = result + lines[i] + "\n"
-		i = i + 1
-	}
-	return result
-}
-
-func severity_emoji(severity) {
-	if severity == "critical" { return "🔴" }
-	if severity == "high" { return "🟠" }
-	if severity == "medium" { return "🟡" }
-	return "🔵"
-}
-
-func field_row(label, value) {
-	mut clean := markdown_text(value)
-	clean = replace(clean, "|", "\\|")
-	return "| **" + label + "** | " + clean + " |"
-}
+from src.common import severity_weight, concord_version, markdown_code, markdown_text, append_lines, severity_emoji, markdown_field_row
 
 export func generate_fix_tasks(findings) {
 	version := concord_version()
@@ -103,11 +80,11 @@ export func generate_fix_tasks(findings) {
 			"",
 			"| Field | Value |",
 			"|-------|-------|",
-			field_row("Finding ID", f["id"]),
-			field_row("Severity", f["severity"]),
-			field_row("Confidence", f["confidence"]),
-			field_row("Category", f["category"]),
-			field_row("Human Review", to_string(f["human_review_required"])),
+			markdown_field_row("Finding ID", f["id"]),
+			markdown_field_row("Severity", f["severity"]),
+			markdown_field_row("Confidence", f["confidence"]),
+			markdown_field_row("Category", f["category"]),
+			markdown_field_row("Human Review", to_string(f["human_review_required"])),
 			"",
 			"**Problem:** " + markdown_text(f["summary"]),
 			"",

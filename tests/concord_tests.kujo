@@ -4,8 +4,8 @@
 # current runtime, so this hand-rolled harness is used instead. It exercises the
 # same exported helper functions and command-reporting surfaces the CLI uses.
 
-from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text, sanitize_terminal_text, markdown_text, markdown_code
-from src.scanner import is_git_repo, is_kujo_project, find_readme, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, command_has_token, option_reference_value
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text, sanitize_terminal_text, markdown_text, markdown_code, scan_artifact_limit_bytes, artifact_exceeds_scan_limit, read_file_safe
+from src.scanner import is_git_repo, is_kujo_project, find_readme, find_docs_files, discover_docs_files, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, command_has_token, option_reference_value
 from src.checks.cli_docs import check_cli_docs
 from src.checks.example_validity import check_example_validity
 from src.reporter import generate_markdown_report, generate_json_report
@@ -115,16 +115,21 @@ func test_scanner() {
 	check(extract_yaml_field(text3, "name") == "concord", "extract_yaml_field extracts simple field")
 	mut misleading_yaml := "display_name: Wrong\nname: Right"
 	check(extract_yaml_field(misleading_yaml, "name") == "Right", "extract_yaml_field matches the exact key")
+	check(extract_yaml_field("url: \"https://example.com/a:b\" # docs", "url") == "https://example.com/a:b", "extract_yaml_field preserves colons in quoted values")
+	check(extract_yaml_field("name: concord # package", "name") == "concord", "extract_yaml_field removes unquoted inline comments")
 
 	mut text4 := "name = \"concord\"\nversion = \"1.0.0\""
 	check(extract_toml_field(text4, "name") == "concord", "extract_toml_field extracts simple field")
 	check(extract_toml_field(text4, "version") == "1.0.0", "extract_toml_field extracts version value")
 	mut misleading_toml := "display_name = \"Wrong\"\nname = \"Right\""
 	check(extract_toml_field(misleading_toml, "name") == "Right", "extract_toml_field matches the exact key")
+	check(extract_toml_field("token = \"a=b=c\" # fixture", "token") == "a=b=c", "extract_toml_field preserves equals signs in quoted values")
 
 	mut text5 := "{\n  \"name\": \"@kujolang/tribunal\",\n  \"version\": \"0.1.0\"\n}"
 	check(extract_json_string_field(text5, "name") == "@kujolang/tribunal", "extract_json_string_field extracts scoped package name")
 	check(extract_json_string_field(text5, "version") == "0.1.0", "extract_json_string_field extracts package version")
+	check(extract_json_string_field("{\"url\":\"https://example.com:8443/a\"}", "url") == "https://example.com:8443/a", "extract_json_string_field uses structured JSON parsing")
+	check(extract_json_string_field("{\"nested\":{\"name\":\"wrong\"},\"name\":\"right\"}", "name") == "right", "extract_json_string_field reads only the top-level key")
 	check(looks_like_command("npm run build") == 1, "looks_like_command recognizes npm")
 	check(looks_like_command("node dist/src/cli.js help") == 1, "looks_like_command recognizes node")
 	check(looks_like_command("tribunal review docket.md") == 1, "looks_like_command recognizes standalone ecosystem CLIs")
@@ -134,6 +139,32 @@ func test_scanner() {
 	check(command_has_token("kujo run main.kujo scan", "scan") == 1, "command_has_token finds an exact command token")
 	check(command_has_token("kujo run main.kujo rescan", "scan") == 0, "command_has_token rejects substring matches")
 	check(option_reference_value("--config \"config file.toml\"") == "config file.toml", "option_reference_value extracts and unquotes paths")
+
+	create_dir(".concord-recursive-fixture")
+	create_dir(".concord-recursive-fixture/docs")
+	create_dir(".concord-recursive-fixture/docs/guides")
+	create_dir(".concord-recursive-fixture/examples")
+	create_dir(".concord-recursive-fixture/examples/nested")
+	write_file(".concord-recursive-fixture/docs/guides/cli.md", "# Nested CLI\n")
+	write_file(".concord-recursive-fixture/examples/nested/demo.kujo", "print(\"demo\")\n")
+	mut recursive_docs := find_docs_files(".concord-recursive-fixture")
+	mut recursive_examples := find_example_files(".concord-recursive-fixture")
+	check(len(recursive_docs) == 1, "find_docs_files recursively discovers nested documentation")
+	check(ends_with(recursive_docs[0], "docs/guides/cli.md") == 1, "find_docs_files preserves the nested documentation path")
+	check(len(recursive_examples) == 1, "find_example_files recursively discovers nested examples")
+
+	create_dir(".concord-recursive-fixture/docs/a")
+	create_dir(".concord-recursive-fixture/docs/a/b")
+	create_dir(".concord-recursive-fixture/docs/a/b/c")
+	create_dir(".concord-recursive-fixture/docs/a/b/c/d")
+	create_dir(".concord-recursive-fixture/docs/a/b/c/d/e")
+	write_file(".concord-recursive-fixture/docs/a/b/c/d/e/too-deep.md", "deep\n")
+	mut bounded_docs := discover_docs_files(".concord-recursive-fixture")
+	check(bounded_docs["truncated"] == 1, "recursive documentation discovery reports depth truncation")
+
+	write_file(".concord-recursive-fixture/oversized.md", repeat("x", scan_artifact_limit_bytes() + 1))
+	check(artifact_exceeds_scan_limit(".concord-recursive-fixture/oversized.md") == 1, "artifact scan size limit is enforced")
+	check(read_file_safe(".concord-recursive-fixture/oversized.md") == "", "read_file_safe refuses oversized artifacts")
 
 	create_dir(".concord-worktree-fixture")
 	write_file(".concord-worktree-fixture/.git", "gitdir: ../actual-worktree-git-dir\n")
@@ -158,6 +189,37 @@ func test_checks() {
 	write_file(".concord-cli-docs-fixture/README.md", "# Fixture\n\n```bash\ngit clone example\nnpm run build\nkujo run main.kujo scan\n```\n")
 	mut mixed_findings := check_cli_docs(".concord-cli-docs-fixture", "kujo")
 	check(len(mixed_findings) == 0, "cli docs check ignores commands for other tools")
+
+	create_dir(".concord-nested-docs-fixture")
+	create_dir(".concord-nested-docs-fixture/docs")
+	create_dir(".concord-nested-docs-fixture/docs/guides")
+	write_file(".concord-nested-docs-fixture/kujo.toml", "[project]\nname = \"fixture\"\nentry = \"main.kujo\"\n")
+	write_file(".concord-nested-docs-fixture/main.kujo", "if subcommand == \"scan\" { print(\"ok\") }\n")
+	write_file(".concord-nested-docs-fixture/README.md", "# Fixture\n\n```bash\nkujo run main.kujo scan\n```\n")
+	write_file(".concord-nested-docs-fixture/docs/guides/cli.md", "# Stale nested docs\n\n```bash\nkujo run main.kujo rescan\n```\n")
+	mut nested_doc_findings := check_cli_docs(".concord-nested-docs-fixture", "kujo")
+	mut nested_mismatch_found := 0
+	mut nd := 0
+	while nd < len(nested_doc_findings) {
+		if starts_with(nested_doc_findings[nd]["id"], "cli-docs-mismatch-") == 1 && ends_with(nested_doc_findings[nd]["source_artifact"], "docs/guides/cli.md") == 1 {
+			nested_mismatch_found = 1
+		}
+		nd = nd + 1
+	}
+	check(nested_mismatch_found == 1, "cli docs check validates recursively discovered documentation")
+
+	create_dir(".concord-oversized-fixture")
+	write_file(".concord-oversized-fixture/kujo.toml", "[project]\nname = \"fixture\"\nentry = \"main.kujo\"\n")
+	write_file(".concord-oversized-fixture/main.kujo", "if subcommand == \"scan\" { print(\"ok\") }\n")
+	write_file(".concord-oversized-fixture/README.md", repeat("x", scan_artifact_limit_bytes() + 1))
+	mut oversized_findings := check_cli_docs(".concord-oversized-fixture", "kujo")
+	mut oversized_finding_found := 0
+	mut of := 0
+	while of < len(oversized_findings) {
+		if contains(oversized_findings[of]["id"], "artifact-too-large") == 1 { oversized_finding_found = 1 }
+		of = of + 1
+	}
+	check(oversized_finding_found == 1, "cli docs check reports oversized artifacts instead of silently scanning partial input")
 
 	create_dir(".concord-examples-fixture")
 	create_dir(".concord-examples-fixture/examples")

@@ -1,15 +1,16 @@
 # Concord — Manifest ↔ Docs alignment checks
 
-from src.common import read_file_safe, extract_version_from_text, is_truthy
+from src.common import read_file_safe, is_truthy
 from src.scanner import find_readme, find_manifest_files, extract_toml_field, extract_json_string_field, extract_badge_version
+from src.checks.shared import assess_artifacts
 
 export func check_manifest_docs(dir_path) {
 	mut findings := []
 
-	readme_path := find_readme(dir_path)
-	manifest_files := find_manifest_files(dir_path)
+	mut readme_path := find_readme(dir_path)
+	mut manifest_candidates := find_manifest_files(dir_path)
 
-	if len(manifest_files) == 0 {
+	if len(manifest_candidates) == 0 {
 		findings = push(findings, {
 			"id": "manifest-docs-no-manifest",
 			"severity": "medium",
@@ -44,6 +45,24 @@ export func check_manifest_docs(dir_path) {
 		})
 		return findings
 	}
+
+	manifest_assessment := assess_artifacts(manifest_candidates, "manifest-docs-alignment")
+	mut manifest_files := manifest_assessment["paths"]
+	mut a := 0
+	while a < len(manifest_assessment["findings"]) {
+		findings = push(findings, manifest_assessment["findings"][a])
+		a = a + 1
+	}
+	readme_assessment := assess_artifacts([readme_path], "manifest-docs-alignment")
+	a = 0
+	while a < len(readme_assessment["findings"]) {
+		findings = push(findings, readme_assessment["findings"][a])
+		a = a + 1
+	}
+	if len(manifest_files) == 0 || len(readme_assessment["paths"]) == 0 {
+		return findings
+	}
+	readme_path = readme_assessment["paths"][0]
 
 	readme_content := read_file_safe(readme_path)
 

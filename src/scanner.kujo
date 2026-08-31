@@ -1,6 +1,6 @@
 # Concord — artifact scanner (file discovery and detection)
 
-from src.common import read_file_safe, file_has_extension, is_truthy, trim_space
+from src.common import read_file_safe, file_has_extension, is_truthy, trim_space, artifact_exceeds_scan_limit
 
 # --- Repository detection ---
 
@@ -20,6 +20,86 @@ export func is_kujo_project(dir_path) {
 
 # --- Artifact detection ---
 
+func matches_any_extension(path, extensions) {
+	if len(extensions) == 0 { return 1 }
+	mut i := 0
+	while i < len(extensions) {
+		if file_has_extension(path, extensions[i]) == 1 { return 1 }
+		i = i + 1
+	}
+	return 0
+}
+
+func path_stays_within(root_abs, path) {
+	try {
+		candidate_abs := path_absolute(path)
+		if candidate_abs == root_abs { return 1 }
+		return is_truthy(starts_with(candidate_abs, root_abs + "/"))
+	} except err {
+		return 0
+	}
+}
+
+func walk_files_bounded(root_abs, dir_path, extensions, depth, max_depth, max_files, max_entries, files, oversized, visited) {
+	mut found := files
+	mut too_large := oversized
+	mut seen_entries := visited
+	mut truncated := 0
+	if depth > max_depth {
+		return {"files": found, "oversized": too_large, "visited": seen_entries, "truncated": 1}
+	}
+
+	mut entries := sort(list_dir(dir_path))
+	mut i := 0
+	while i < len(entries) {
+		if seen_entries >= max_entries || len(found) + len(too_large) >= max_files {
+			truncated = 1
+			break
+		}
+		seen_entries = seen_entries + 1
+		path := join_path(dir_path, entries[i])
+		if path_stays_within(root_abs, path) == 1 {
+			if is_truthy(path_is_dir(path)) == 1 {
+				if depth >= max_depth {
+					truncated = 1
+				} else {
+					nested := walk_files_bounded(root_abs, path, extensions, depth + 1, max_depth, max_files, max_entries, found, too_large, seen_entries)
+					found = nested["files"]
+					too_large = nested["oversized"]
+					seen_entries = nested["visited"]
+					if nested["truncated"] == 1 { truncated = 1 }
+				}
+			} else if matches_any_extension(path, extensions) == 1 {
+				if artifact_exceeds_scan_limit(path) == 1 {
+					too_large = push(too_large, path)
+				} else {
+					found = push(found, path)
+				}
+			}
+		}
+		i = i + 1
+	}
+	return {"files": found, "oversized": too_large, "visited": seen_entries, "truncated": truncated}
+}
+
+export func discover_files_bounded(root_path, extensions) {
+	mut empty := []
+	if is_truthy(path_is_dir(root_path)) == 0 {
+		return {"files": empty, "oversized": empty, "visited": 0, "truncated": 0, "max_depth": 4, "max_files": 256, "max_entries": 2048}
+	}
+	root_abs := path_absolute(root_path)
+	result := walk_files_bounded(root_abs, root_path, extensions, 0, 4, 256, 2048, [], [], 0)
+	return {
+		"files": result["files"],
+		"oversized": result["oversized"],
+		"visited": result["visited"],
+		"truncated": result["truncated"],
+		"max_depth": 4,
+		"max_files": 256,
+		"max_entries": 2048
+	}
+}
+
 export func find_readme(dir_path) {
 	mut candidates := ["README.md", "readme.md", "README", "README.txt", "README.rst"]
 	mut i := 0
@@ -35,20 +115,12 @@ export func find_readme(dir_path) {
 
 export func find_docs_files(dir_path) {
 	docs_dir := join_path(dir_path, "docs")
-	mut result := []
-	if is_truthy(path_is_dir(docs_dir)) == 0 {
-		return result
-	}
-	mut entries := list_dir(docs_dir)
-	mut i := 0
-	while i < len(entries) {
-		name := entries[i]
-		if file_has_extension(name, ".md") == 1 {
-			result = push(result, join_path(docs_dir, name))
-		}
-		i = i + 1
-	}
-	return result
+	result := discover_files_bounded(docs_dir, [".md", ".mdx", ".rst"])
+	return result["files"]
+}
+
+export func discover_docs_files(dir_path) {
+	return discover_files_bounded(join_path(dir_path, "docs"), [".md", ".mdx", ".rst"])
 }
 
 export func find_spec_files(dir_path) {
@@ -68,42 +140,44 @@ export func find_spec_files(dir_path) {
 	return result
 }
 
-export func find_eval_files(dir_path) {
-	mut result := []
+export func discover_eval_files(dir_path) {
+	mut candidates := []
+	mut oversized := []
+	mut truncated := 0
+	mut visited := 0
 	# Check for eval suite JSON files in tests/ or eval_results/
 	mut check_dirs := [join_path(dir_path, "tests"), join_path(dir_path, "eval_results"), join_path(dir_path, "examples")]
 	mut d := 0
 	while d < len(check_dirs) {
 		check_dir := check_dirs[d]
-		if is_truthy(path_is_dir(check_dir)) == 1 {
-			mut entries := list_dir(check_dir)
-			mut j := 0
-			while j < len(entries) {
-				name := entries[j]
-				if file_has_extension(name, ".json") == 1 {
-					# Try to detect eval suite files by content
-					full_path := join_path(check_dir, name)
-					content := read_file_safe(full_path)
-					mut is_eval := 0
-					if is_truthy(contains(content, "\"checks\"")) == 1 {
-						is_eval = 1
-					}
-					if is_truthy(contains(content, "\"suite\"")) == 1 {
-						is_eval = 1
-					}
-					if is_truthy(contains(content, "\"tests\"")) == 1 && is_truthy(contains(content, "\"check\"")) == 1 {
-						is_eval = 1
-					}
-					if is_eval == 1 {
-						result = push(result, full_path)
-					}
-				}
-				j = j + 1
-			}
+		discovery := discover_files_bounded(check_dir, [".json"])
+		mut discovered := discovery["files"]
+		mut j := 0
+		while j < len(discovered) {
+			full_path := discovered[j]
+			content := read_file_safe(full_path)
+			mut is_eval := 0
+			if is_truthy(contains(content, "\"checks\"")) == 1 { is_eval = 1 }
+			if is_truthy(contains(content, "\"suite\"")) == 1 { is_eval = 1 }
+			if is_truthy(contains(content, "\"tests\"")) == 1 && is_truthy(contains(content, "\"check\"")) == 1 { is_eval = 1 }
+			if is_eval == 1 { candidates = push(candidates, full_path) }
+			j = j + 1
 		}
+		mut large := discovery["oversized"]
+		j = 0
+		while j < len(large) {
+			oversized = push(oversized, large[j])
+			j = j + 1
+		}
+		visited = visited + discovery["visited"]
+		if discovery["truncated"] == 1 { truncated = 1 }
 		d = d + 1
 	}
-	return result
+	return {"files": candidates, "oversized": oversized, "visited": visited, "truncated": truncated, "max_depth": 4, "max_files": 256, "max_entries": 2048}
+}
+
+export func find_eval_files(dir_path) {
+	return discover_eval_files(dir_path)["files"]
 }
 
 export func find_manifest_files(dir_path) {
@@ -145,17 +219,11 @@ export func find_changelog(dir_path) {
 }
 
 export func find_example_files(dir_path) {
-	mut result := []
-	examples_dir := join_path(dir_path, "examples")
-	if is_truthy(path_is_dir(examples_dir)) == 1 {
-		mut entries := list_dir(examples_dir)
-		mut i := 0
-		while i < len(entries) {
-			result = push(result, join_path(examples_dir, entries[i]))
-			i = i + 1
-		}
-	}
-	return result
+	return discover_example_files(dir_path)["files"]
+}
+
+export func discover_example_files(dir_path) {
+	return discover_files_bounded(join_path(dir_path, "examples"), [])
 }
 
 export func find_cli_entry(dir_path) {
@@ -223,22 +291,16 @@ export func looks_like_command(line) {
 }
 
 export func extract_json_string_field(text, field_name) {
-	pattern := "\\\"" + field_name + "\\\"\\s*:\\s*\\\"[^\\\"]+\\\""
-	matches := regex_find_all(text, pattern)
-	if len(matches) == 0 {
+	try {
+		value := parse_json(text)
+		if is_truthy(is_dict(value)) == 0 { return "" }
+		if is_truthy(has_key(value, field_name)) == 0 { return "" }
+		field_value := value[field_name]
+		if is_truthy(is_string(field_value)) == 0 { return "" }
+		return field_value
+	} except err {
 		return ""
 	}
-	raw := matches[0]
-	parts := split(raw, ":")
-	if len(parts) < 2 {
-		return ""
-	}
-	value := trim_space(parts[1])
-	quote_parts := split(value, "\"")
-	if len(quote_parts) > 1 {
-		return trim_space(quote_parts[1])
-	}
-	return ""
 }
 
 export func extract_fenced_commands(text) {
@@ -308,53 +370,57 @@ export func extract_badge_version(text) {
 # --- YAML/TOML simple extraction (regex-based, no parser) ---
 
 export func extract_yaml_field(text, field_name) {
-	# Very simple regex-based field extraction from YAML
-	# Pattern: field_name: "value" or field_name: value or field_name: 'value'
-	mut pattern := "(?:^|\\n)\\s*" + field_name + ":\\s*[\"']?([^\"'\\n]+)[\"']?"
-	mut matches := regex_find_all(text, pattern)
-	if len(matches) > 0 {
-		mut raw := trim_space(matches[0])
-		mut parts := split(raw, ":")
-		if len(parts) > 1 {
-			mut value := trim_space(parts[1])
-			mut quote_parts := split(value, "\"")
-			if len(quote_parts) > 1 {
-				return trim_space(quote_parts[1])
+	mut lines := split(replace(text, "\\r\\n", "\\n"), "\n")
+	mut i := 0
+	while i < len(lines) {
+		line := trim_space(lines[i])
+		separator := index_of(line, ":")
+		if separator >= 0 {
+			key := trim_space(substring(line, 0, separator))
+			if key == field_name {
+				return extract_simple_scalar(substring(line, separator + 1, len(line)), " #")
 			}
-			mut single_quote_parts := split(value, "'")
-			if len(single_quote_parts) > 1 {
-				return trim_space(single_quote_parts[1])
-			}
-			return value
 		}
-		return raw
+		i = i + 1
 	}
 	return ""
 }
 
 export func extract_toml_field(text, field_name) {
-	# Very simple regex-based field extraction from TOML
-	# Pattern: field_name = "value" or field_name = 'value'
-	mut pattern := "(?:^|\\n)\\s*" + field_name + "\\s*=\\s*[\"']([^\"']+)[\"']"
-	mut matches := regex_find_all(text, pattern)
-	if len(matches) > 0 {
-		mut raw := trim_space(matches[0])
-		mut parts := split(raw, "=")
-		if len(parts) > 1 {
-			mut value := trim_space(parts[1])
-			mut quote_parts := split(value, "\"")
-			if len(quote_parts) > 1 {
-				return trim_space(quote_parts[1])
+	mut lines := split(replace(text, "\\r\\n", "\\n"), "\n")
+	mut i := 0
+	while i < len(lines) {
+		line := trim_space(lines[i])
+		separator := index_of(line, "=")
+		if separator >= 0 {
+			key := trim_space(substring(line, 0, separator))
+			if key == field_name {
+				return extract_simple_scalar(substring(line, separator + 1, len(line)), " #")
 			}
-			mut single_quote_parts := split(value, "'")
-			if len(single_quote_parts) > 1 {
-				return trim_space(single_quote_parts[1])
-			}
-			return value
 		}
-		return raw
+		i = i + 1
 	}
 	return ""
+}
+
+func extract_simple_scalar(raw_value, comment_marker) {
+	mut value := trim_space(raw_value)
+	if len(value) >= 2 {
+		first := substring(value, 0, 1)
+		if first == "\"" {
+			mut parts := split(value, "\"")
+			if len(parts) > 1 { return parts[1] }
+		}
+		if first == "'" {
+			mut parts := split(value, "'")
+			if len(parts) > 1 { return parts[1] }
+		}
+	}
+	comment_at := index_of(value, comment_marker)
+	if comment_at >= 0 {
+		value = trim_space(substring(value, 0, comment_at))
+	}
+	return value
 }
 
 export func command_invokes_entry(command, entry_script) {

@@ -1,17 +1,53 @@
 # Concord — Source-of-truth mapping
 
-from src.common import read_file_safe, is_truthy
+from src.common import is_truthy
 from src.scanner import find_readme, find_manifest_files, find_spec_files, find_changelog, find_cli_entry
+from src.checks.shared import assess_artifacts
 
 export func check_source_of_truth(dir_path) {
 	mut findings := []
 	mut sources := {}
 
-	readme_path := find_readme(dir_path)
-	manifest_files := find_manifest_files(dir_path)
-	spec_files := find_spec_files(dir_path)
-	changelog_path := find_changelog(dir_path)
-	entry_script := find_cli_entry(dir_path)
+	mut readme_path := find_readme(dir_path)
+	mut manifest_files := find_manifest_files(dir_path)
+	mut spec_files := find_spec_files(dir_path)
+	mut changelog_path := find_changelog(dir_path)
+	mut entry_script := find_cli_entry(dir_path)
+	mut candidates := manifest_files
+	mut a := 0
+	while a < len(spec_files) { candidates = push(candidates, spec_files[a]); a = a + 1 }
+	if readme_path != "" { candidates = push(candidates, readme_path) }
+	if changelog_path != "" { candidates = push(candidates, changelog_path) }
+	if entry_script != "" { candidates = push(candidates, entry_script) }
+	assessment := assess_artifacts(candidates, "source-of-truth")
+	a = 0
+	while a < len(assessment["findings"]) {
+		findings = push(findings, assessment["findings"][a])
+		a = a + 1
+	}
+	mut safe_lookup := {}
+	a = 0
+	while a < len(assessment["paths"]) {
+		safe_lookup[assessment["paths"][a]] = 1
+		a = a + 1
+	}
+	mut safe_manifests := []
+	a = 0
+	while a < len(manifest_files) {
+		if has_key(safe_lookup, manifest_files[a]) == 1 { safe_manifests = push(safe_manifests, manifest_files[a]) }
+		a = a + 1
+	}
+	manifest_files = safe_manifests
+	mut safe_specs := []
+	a = 0
+	while a < len(spec_files) {
+		if has_key(safe_lookup, spec_files[a]) == 1 { safe_specs = push(safe_specs, spec_files[a]) }
+		a = a + 1
+	}
+	spec_files = safe_specs
+	if readme_path != "" && has_key(safe_lookup, readme_path) == 0 { readme_path = "" }
+	if changelog_path != "" && has_key(safe_lookup, changelog_path) == 0 { changelog_path = "" }
+	if entry_script != "" && has_key(safe_lookup, entry_script) == 0 { entry_script = "" }
 
 	# Determine likely source of truth for key facts
 	# Command names: CLI entry or README?

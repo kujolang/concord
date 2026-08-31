@@ -57,7 +57,7 @@ scope: |
   - Full repo intelligence (Scout territory)
   - Diff summarization (PatchBrief territory)
   - Onboarding/HOWTO verification (Trail territory)
-  - YAML/TOML parsing (regex-based field extraction only)
+  - Full YAML/TOML parsing (exact-key scalar extraction only)
   - AST-level code analysis
   - Publishing packages or public releases
   - Pushing final release tags

@@ -1,16 +1,41 @@
 # Concord — Spec ↔ Eval alignment checks
 
-from src.common import read_file_safe, extract_version_from_text
-from src.scanner import find_spec_files, find_eval_files, extract_yaml_field
+from src.common import read_file_safe
+from src.scanner import find_spec_files, discover_eval_files
+from src.checks.shared import assess_artifacts, discovery_limit_finding
 
 export func check_spec_eval(dir_path) {
 	mut findings := []
 
-	spec_files := find_spec_files(dir_path)
-	eval_files := find_eval_files(dir_path)
+	mut spec_candidates := find_spec_files(dir_path)
+	spec_assessment := assess_artifacts(spec_candidates, "spec-eval-alignment")
+	mut spec_files := spec_assessment["paths"]
+	mut i := 0
+	while i < len(spec_assessment["findings"]) {
+		findings = push(findings, spec_assessment["findings"][i])
+		i = i + 1
+	}
+
+	eval_discovery := discover_eval_files(dir_path)
+	mut eval_candidates := eval_discovery["files"]
+	i = 0
+	while i < len(eval_discovery["oversized"]) {
+		eval_candidates = push(eval_candidates, eval_discovery["oversized"][i])
+		i = i + 1
+	}
+	eval_assessment := assess_artifacts(eval_candidates, "spec-eval-alignment")
+	mut eval_files := eval_assessment["paths"]
+	i = 0
+	while i < len(eval_assessment["findings"]) {
+		findings = push(findings, eval_assessment["findings"][i])
+		i = i + 1
+	}
+	if eval_discovery["truncated"] == 1 {
+		findings = push(findings, discovery_limit_finding("spec-eval-alignment", dir_path, eval_discovery["max_depth"], eval_discovery["max_files"]))
+	}
 
 	# Check 1: Spec files exist
-	if len(spec_files) == 0 {
+	if len(spec_candidates) == 0 {
 		findings = push(findings, {
 			"id": "spec-eval-no-spec",
 			"severity": "low",
@@ -28,7 +53,7 @@ export func check_spec_eval(dir_path) {
 	}
 
 	# Check 2: Eval files exist
-	if len(eval_files) == 0 {
+	if len(eval_candidates) == 0 {
 		findings = push(findings, {
 			"id": "spec-eval-no-eval",
 			"severity": "low",

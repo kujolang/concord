@@ -1,16 +1,40 @@
 # Concord — Example validity checks
 
 from src.common import read_file_safe, is_truthy
-from src.scanner import find_readme, find_example_files, extract_fenced_commands
-from src.scanner import find_cli_entry, get_cli_help_commands, option_reference_value
+from src.scanner import find_readme, discover_example_files, extract_fenced_commands
+from src.scanner import option_reference_value
+from src.checks.shared import assess_artifacts, discovery_limit_finding
 
 export func check_example_validity(dir_path, kujo_bin) {
 	mut findings := []
 
-	readme_path := find_readme(dir_path)
-	example_files := find_example_files(dir_path)
-	entry_script := find_cli_entry(dir_path)
-
+	mut readme_path := find_readme(dir_path)
+	discovery := discover_example_files(dir_path)
+	mut example_candidates := discovery["files"]
+	mut i := 0
+	while i < len(discovery["oversized"]) {
+		example_candidates = push(example_candidates, discovery["oversized"][i])
+		i = i + 1
+	}
+	example_assessment := assess_artifacts(example_candidates, "example-validity")
+	mut example_files := example_assessment["paths"]
+	i = 0
+	while i < len(example_assessment["findings"]) {
+		findings = push(findings, example_assessment["findings"][i])
+		i = i + 1
+	}
+	if discovery["truncated"] == 1 {
+		findings = push(findings, discovery_limit_finding("example-validity", join_path(dir_path, "examples"), discovery["max_depth"], discovery["max_files"]))
+	}
+	mut readme_candidates := []
+	if readme_path != "" { readme_candidates = push(readme_candidates, readme_path) }
+	readme_assessment := assess_artifacts(readme_candidates, "example-validity")
+	i = 0
+	while i < len(readme_assessment["findings"]) {
+		findings = push(findings, readme_assessment["findings"][i])
+		i = i + 1
+	}
+	if len(readme_assessment["paths"]) == 0 { readme_path = "" }
 	# Check 1: Example files exist
 	if len(example_files) == 0 {
 		findings = push(findings, {

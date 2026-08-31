@@ -2,14 +2,40 @@
 
 from src.common import read_file_safe, extract_version_from_text, is_truthy
 from src.scanner import find_readme, find_manifest_files, find_changelog, extract_toml_field, extract_json_string_field, extract_badge_version
+from src.checks.shared import assess_artifacts
 
 export func check_version_consistency(dir_path) {
 	mut findings := []
 	mut version_sources := {}
 
-	readme_path := find_readme(dir_path)
-	manifest_files := find_manifest_files(dir_path)
-	changelog_path := find_changelog(dir_path)
+	mut readme_path := find_readme(dir_path)
+	mut manifest_files := find_manifest_files(dir_path)
+	mut changelog_path := find_changelog(dir_path)
+	mut candidates := manifest_files
+	if readme_path != "" { candidates = push(candidates, readme_path) }
+	if changelog_path != "" { candidates = push(candidates, changelog_path) }
+	assessment := assess_artifacts(candidates, "version-consistency")
+	mut safe_paths := assessment["paths"]
+	mut a := 0
+	while a < len(assessment["findings"]) {
+		findings = push(findings, assessment["findings"][a])
+		a = a + 1
+	}
+	mut safe_lookup := {}
+	a = 0
+	while a < len(safe_paths) {
+		safe_lookup[safe_paths[a]] = 1
+		a = a + 1
+	}
+	mut safe_manifests := []
+	a = 0
+	while a < len(manifest_files) {
+		if has_key(safe_lookup, manifest_files[a]) == 1 { safe_manifests = push(safe_manifests, manifest_files[a]) }
+		a = a + 1
+	}
+	manifest_files = safe_manifests
+	if readme_path != "" && has_key(safe_lookup, readme_path) == 0 { readme_path = "" }
+	if changelog_path != "" && has_key(safe_lookup, changelog_path) == 0 { changelog_path = "" }
 
 	# Collect versions from all sources
 	if readme_path != "" {
