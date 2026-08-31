@@ -40,60 +40,58 @@ func path_stays_within(root_abs, path) {
 	}
 }
 
-func walk_files_bounded(root_abs, dir_path, extensions, depth, max_depth, max_files, max_entries, files, oversized, visited) {
-	mut found := files
-	mut too_large := oversized
-	mut seen_entries := visited
-	mut truncated := 0
-	if depth > max_depth {
-		return {"files": found, "oversized": too_large, "visited": seen_entries, "truncated": 1}
-	}
-
-	mut entries := sort(list_dir(dir_path))
-	mut i := 0
-	while i < len(entries) {
-		if seen_entries >= max_entries || len(found) + len(too_large) >= max_files {
-			truncated = 1
-			break
-		}
-		seen_entries = seen_entries + 1
-		path := join_path(dir_path, entries[i])
-		if path_stays_within(root_abs, path) == 1 {
-			if is_truthy(path_is_dir(path)) == 1 {
-				if depth >= max_depth {
-					truncated = 1
-				} else {
-					nested := walk_files_bounded(root_abs, path, extensions, depth + 1, max_depth, max_files, max_entries, found, too_large, seen_entries)
-					found = nested["files"]
-					too_large = nested["oversized"]
-					seen_entries = nested["visited"]
-					if nested["truncated"] == 1 { truncated = 1 }
-				}
-			} else if matches_any_extension(path, extensions) == 1 {
-				if artifact_exceeds_scan_limit(path) == 1 {
-					too_large = push(too_large, path)
-				} else {
-					found = push(found, path)
-				}
-			}
-		}
-		i = i + 1
-	}
-	return {"files": found, "oversized": too_large, "visited": seen_entries, "truncated": truncated}
-}
-
 export func discover_files_bounded(root_path, extensions) {
-	mut empty := []
+	mut files := []
+	mut oversized := []
 	if is_truthy(path_is_dir(root_path)) == 0 {
-		return {"files": empty, "oversized": empty, "visited": 0, "truncated": 0, "max_depth": 4, "max_files": 256, "max_entries": 2048}
+		return {"files": files, "oversized": oversized, "visited": 0, "truncated": 0, "max_depth": 4, "max_files": 256, "max_entries": 2048}
 	}
 	root_abs := path_absolute(root_path)
-	result := walk_files_bounded(root_abs, root_path, extensions, 0, 4, 256, 2048, [], [], 0)
+	mut pending_dirs := [root_path]
+	mut pending_depths := [0]
+	mut next_dir := 0
+	mut visited := 0
+	mut truncated := 0
+	while next_dir < len(pending_dirs) {
+		dir_path := pending_dirs[next_dir]
+		depth := pending_depths[next_dir]
+		next_dir = next_dir + 1
+		mut entries := sort(list_dir(dir_path))
+		mut i := 0
+		while i < len(entries) {
+			if visited >= 2048 || len(files) + len(oversized) >= 256 {
+				truncated = 1
+				break
+			}
+			visited = visited + 1
+			path := join_path(dir_path, entries[i])
+			if path_stays_within(root_abs, path) == 1 {
+				if is_truthy(path_is_dir(path)) == 1 {
+					if depth >= 4 {
+						truncated = 1
+					} else {
+						pending_dirs = push(pending_dirs, path)
+						pending_depths = push(pending_depths, depth + 1)
+					}
+				} else if matches_any_extension(path, extensions) == 1 {
+					if artifact_exceeds_scan_limit(path) == 1 {
+						oversized = push(oversized, path)
+					} else {
+						files = push(files, path)
+					}
+				}
+			}
+			i = i + 1
+		}
+		if truncated == 1 && (visited >= 2048 || len(files) + len(oversized) >= 256) {
+			break
+		}
+	}
 	return {
-		"files": result["files"],
-		"oversized": result["oversized"],
-		"visited": result["visited"],
-		"truncated": result["truncated"],
+		"files": files,
+		"oversized": oversized,
+		"visited": visited,
+		"truncated": truncated,
 		"max_depth": 4,
 		"max_files": 256,
 		"max_entries": 2048
