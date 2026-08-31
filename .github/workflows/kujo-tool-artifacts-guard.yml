@@ -8,6 +8,16 @@ permissions:
   contents: read
 
 jobs:
+  continuous-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Validate shell workflows
+        run: |
+          bash -n kujo scripts/concord_continuous_loop.sh tests/continuous_loop_tests.sh .github/scripts/check-kujo-tool-artifacts.sh
+          bash tests/continuous_loop_tests.sh
+
   tool-artifacts:
     runs-on: ubuntu-latest
     steps:
@@ -20,4 +30,3 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash .github/scripts/check-kujo-tool-artifacts.sh
-
