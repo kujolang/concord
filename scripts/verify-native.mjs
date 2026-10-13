@@ -23,7 +23,7 @@ for (const flags of modes) {
     assert.ifError(result.error);
     assert.equal(result.status, 0, `${flags.length ? 'interpreter' : 'VM'} assertions failed`);
     const summary = JSON.parse(result.stdout.trim().split('\n').at(-1));
-    assert.equal(summary.passed, 102, 'Every registered assertion must execute');
+    assert.equal(summary.passed, 106, 'Every registered assertion must execute');
     assert.equal(summary.failed, 0);
     const driver = await readFile(join(directory, 'native-tests.kujo'), 'utf8');
     await writeFile(join(directory, 'negative-control.kujo'), driver.replace('\ntest_common()\n', '\ncheck(false, "runner negative control")\ntest_common()\n'));

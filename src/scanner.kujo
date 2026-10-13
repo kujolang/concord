@@ -424,13 +424,13 @@ export func command_invokes_entry(command, entry_script) {
 	if entry_script == "" {
 		return 0
 	}
-	mut parts := split(entry_script, "/")
+	mut parts := split(replace(entry_script, "\\", "/"), "/")
 	entry_name := parts[len(parts) - 1]
 	mut tokens := split(trim_space(command), " ")
 	mut i := 0
 	while i + 1 < len(tokens) {
 		if tokens[i] == "run" {
-			mut candidate_parts := split(strip_shell_quotes(tokens[i + 1]), "/")
+			mut candidate_parts := split(replace(strip_shell_quotes(tokens[i + 1]), "\\", "/"), "/")
 			if candidate_parts[len(candidate_parts) - 1] == entry_name {
 				return 1
 			}
@@ -442,7 +442,7 @@ export func command_invokes_entry(command, entry_script) {
 		stem = substring(stem, 0, len(stem) - 5)
 	}
 	if len(tokens) > 0 {
-		mut first_parts := split(strip_shell_quotes(tokens[0]), "/")
+		mut first_parts := split(replace(strip_shell_quotes(tokens[0]), "\\", "/"), "/")
 		if first_parts[len(first_parts) - 1] == stem { return 1 }
 	}
 	return 0

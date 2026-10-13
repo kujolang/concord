@@ -121,7 +121,7 @@ bash tests/continuous_loop_tests.sh
 ```
 
 The native gate needs Node.js 24+ and the released Kujo 1.8.1 runtime. It runs
-102 assertions in both VM and interpreter modes in fresh temporary copies, proves
+106 assertions in both VM and interpreter modes in fresh temporary copies, proves
 that an intentional failed assertion exits nonzero, and checks real CLI JSON,
 Markdown, exit codes and non-execution of project source. `./kujo test` routes to
 this gate when `KUJO_RUNTIME_BIN` is configured. Plain `kujo test` is a snapshot

@@ -124,7 +124,7 @@ export func check_example_validity(dir_path, kujo_bin) {
 			while e < len(example_files) {
 				example_name := example_files[e]
 				# Extract just the filename for comparison
-				mut parts := split(example_name, "/")
+				mut parts := split(replace(example_name, "\\", "/"), "/")
 				mut base_name := parts[len(parts) - 1]
 				if contains(readme_content, base_name) == 0 {
 					# Only flag if it's a significant example file

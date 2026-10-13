@@ -142,6 +142,9 @@ func test_scanner() {
 	check(command_invokes_entry("git clone example", "main.kujo") == 0, "command_invokes_entry rejects unrelated commands")
 	check(command_invokes_entry("kujo run main.kujo scan", "main.kujo") == 1, "command_invokes_entry recognizes Kujo entry commands")
 	check(command_invokes_entry("kujo run main.kujo.bak scan", "main.kujo") == 0, "command_invokes_entry requires an exact entry filename")
+	check(command_invokes_entry("kujo run src\\cli.kujo scan", "C:\\repo\\src\\cli.kujo") == 1, "command matching recognizes Windows script paths")
+	check(command_invokes_entry("bin\\tool scan", "C:\\repo\\tool.kujo") == 1, "command matching recognizes Windows executable paths")
+	check(command_invokes_entry("kujo run other.kujo scan", "C:\\repo\\cli.kujo") == 0, "Windows matching still requires the exact entry name")
 	check(command_has_token("kujo run main.kujo scan", "scan") == 1, "command_has_token finds an exact command token")
 	check(command_has_token("kujo run main.kujo rescan", "scan") == 0, "command_has_token rejects substring matches")
 	check(option_reference_value("--config \"config file.toml\"") == "config file.toml", "option_reference_value extracts and unquotes paths")
@@ -230,8 +233,9 @@ func test_checks() {
 	create_dir(".concord-examples-fixture")
 	create_dir(".concord-examples-fixture/examples")
 	write_file(".concord-examples-fixture/examples/README.md", "fixture\n")
+	write_file(".concord-examples-fixture/examples/demo.kujo", "print(1)\n")
 	write_file(".concord-examples-fixture/config file.toml", "enabled = true\n")
-	write_file(".concord-examples-fixture/README.md", "# Fixture\n\n```bash\nkujo run main.kujo scan --config \"config file.toml\" --output reports/new.md --file missing.toml\n```\n")
+	write_file(".concord-examples-fixture/README.md", "# Fixture\nSee demo.kujo\n\n```bash\nkujo run main.kujo scan --config \"config file.toml\" --output reports/new.md --file missing.toml\n```\n")
 	mut example_findings := check_example_validity(".concord-examples-fixture", "kujo")
 	mut missing_path_findings := 0
 	mut missing_target := ""
@@ -245,6 +249,9 @@ func test_checks() {
 	}
 	check(missing_path_findings == 1, "example validity checks input paths but not output destinations")
 	check(missing_target == "missing.toml", "example validity extracts the missing input path")
+	mut orphan := false
+	for item in example_findings { if starts_with(item["id"], "examples-orphan-") { orphan = true } }
+	check(!orphan, "example names are matched independently of platform path separators")
 
 	create_dir(".concord-metadata-fixture")
 	create_dir(".concord-metadata-fixture/tests")
