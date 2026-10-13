@@ -67,7 +67,7 @@ export func check_example_validity(dir_path, kujo_bin) {
 			while j < len(file_refs) {
 				ref := option_reference_value(file_refs[j])
 				# Output paths are destinations and are expected not to exist yet.
-				mut output_ref := is_truthy(starts_with(file_refs[j], "--output ")) == 1
+				mut output_ref := is_truthy(starts_with(file_refs[j], "--output "))
 				if is_truthy(starts_with(file_refs[j], "-o ")) == 1 { output_ref = 1 }
 				if output_ref == 1 {
 					j = j + 1
@@ -117,14 +117,14 @@ export func check_example_validity(dir_path, kujo_bin) {
 
 	# Check 3: Verify example files are referenced in README
 	mut has_examples := len(example_files) > 0
-	if has_examples == 1 {
+	if has_examples {
 		if readme_path != "" {
 			readme_content := read_file_safe(readme_path)
 			mut e := 0
 			while e < len(example_files) {
 				example_name := example_files[e]
 				# Extract just the filename for comparison
-				mut parts := split(example_name, "/")
+				mut parts := split(replace(example_name, "\\", "/"), "/")
 				mut base_name := parts[len(parts) - 1]
 				if contains(readme_content, base_name) == 0 {
 					# Only flag if it's a significant example file

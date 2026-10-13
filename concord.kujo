@@ -266,7 +266,7 @@ func handle_scan(dir_path, kujo_bin, format, output_path) {
 
 	# Exit code based on severity
 	overall := highest_severity(findings)
-	print_drift_warning(overall)
+	if format == "markdown" { print_drift_warning(overall) }
 	return scan_exit_code(findings)
 }
 

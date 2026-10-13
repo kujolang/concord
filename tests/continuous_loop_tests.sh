@@ -13,10 +13,6 @@ cat > "$fake_kujo" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${1:-}" == "test" ]]; then
-	exit 0
-fi
-
 command_name="${4:-}"
 output_path=""
 format="markdown"
@@ -57,6 +53,19 @@ exit 2
 FAKE
 chmod +x "$fake_kujo"
 
+mkdir -p "$test_root/bin"
+cat > "$test_root/bin/node" <<'FAKE_NODE'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == "scripts/verify-native.mjs" ]]
+[[ "${KUJO_RUNTIME_BIN:-}" == "${EXPECTED_NATIVE_BIN:-}" ]]
+exit "${FAKE_NATIVE_STATUS:-0}"
+FAKE_NODE
+chmod +x "$test_root/bin/node"
+export PATH="$test_root/bin:$PATH"
+export EXPECTED_NATIVE_BIN="$fake_kujo"
+export KUJO_RUNTIME_BIN="/unused-default-runtime"
+
 fixture_dir="$test_root/repo \"quoted\"|name"
 mkdir -p "$fixture_dir"
 repos_file="$test_root/repos.txt"
@@ -75,12 +84,17 @@ CONCORD_LOOP_ROOT="$loop_root" KUJO_BIN="$fake_kujo" \
 }
 
 latest_run="$(find "$loop_root/runs" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
-jq -e '.repos[0].status == "ok" and .repos[0].total_findings == 1 and .repos[0].high == 1 and .gate_failed == true' \
+jq -e '.concord_test == "pass" and .repos[0].status == "ok" and .repos[0].total_findings == 1 and .repos[0].high == 1 and .gate_failed == true' \
 	"$latest_run/gate-summary.json" >/dev/null
 jq -e '.status == "ok" and (.path | contains("quoted"))' "$latest_run/records.jsonl" >/dev/null
 [[ "$(wc -l < "$loop_root/trend/scan-trend.jsonl" | tr -d ' ')" == "1" ]]
 grep -F 'repo "quoted"\|name' "$loop_root/trend/latest-summary.md" >/dev/null
 [[ "$(find "$latest_run/scans" -type f -name '001-*.scan.json' | wc -l | tr -d ' ')" == "1" ]]
+
+FAKE_NATIVE_STATUS=1 CONCORD_LOOP_ROOT="$test_root/native-failure" KUJO_BIN="$fake_kujo" \
+	"$repo_root/scripts/concord_continuous_loop.sh" --repos-file "$repos_file" --iterations 1 >/dev/null 2>&1
+native_failure_run="$(find "$test_root/native-failure/runs" -mindepth 1 -maxdepth 1 -type d | head -1)"
+jq -e '.concord_test == "fail" and .gate_failed == true' "$native_failure_run/gate-summary.json" >/dev/null
 
 set +e
 CONCORD_LOOP_ROOT="$test_root/missing-value" KUJO_BIN="$fake_kujo" \

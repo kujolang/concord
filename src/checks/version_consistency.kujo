@@ -1,6 +1,6 @@
 # Concord — Version consistency checks
 
-from src.common import read_file_safe, extract_version_from_text, is_truthy
+from src.common import read_file_safe, extract_changelog_version, is_truthy
 from src.scanner import find_readme, find_manifest_files, find_changelog, extract_toml_field, extract_json_string_field, extract_badge_version
 from src.checks.shared import assess_artifacts
 
@@ -71,7 +71,7 @@ export func check_version_consistency(dir_path) {
 
 	if changelog_path != "" {
 		changelog_content := read_file_safe(changelog_path)
-		cl_ver := extract_version_from_text(changelog_content)
+		cl_ver := extract_changelog_version(changelog_content)
 		if cl_ver != "" {
 			version_sources[changelog_path] = cl_ver
 		}

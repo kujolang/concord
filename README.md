@@ -40,7 +40,7 @@ kujo run concord.kujo -- tasks
 kujo run concord.kujo -- scan --dir /path/to/other-project
 ```
 
-Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README and recursively discovered docs blocks. It compares documented Kujo subcommands with explicit subcommand dispatch in the configured CLI entry source without executing repository code. JavaScript package metadata uses structured JSON parsing; supported YAML/TOML metadata uses exact-key, line-aware scalar extraction.
+Concord recognizes copyable Kujo, Cargo, Git, shell, Node, npm, npx, and standalone Tribunal command examples in fenced README and recursively discovered docs blocks. It compares documented Kujo subcommands with explicit subcommand dispatch in the configured CLI entry source without executing repository code. Version comparison reads versioned Markdown changelog headings, excluding incidental dependency versions in unreleased prose. JavaScript package metadata uses structured JSON parsing; supported YAML/TOML metadata uses exact-key, line-aware scalar extraction.
 
 Recursive docs, Eval, and example discovery is deterministic and bounded to depth 4, 256 matching files, and 2,048 visited directory entries per discovery root. Canonical path checks prevent traversal through symlinks outside that root. Text artifacts larger than 1 MiB are reported as high-severity incomplete-scan findings instead of being read or silently truncated.
 
@@ -116,9 +116,30 @@ Known maturity boundaries:
 ## Running Tests
 
 ```bash
-kujo test
+KUJO_RUNTIME_BIN=/absolute/path/to/kujo node scripts/verify-native.mjs
 bash tests/continuous_loop_tests.sh
 ```
+
+The native gate needs Node.js 24+ and the released Kujo 1.8.1 runtime. It runs
+106 assertions in both VM and interpreter modes in fresh temporary copies, proves
+that an intentional failed assertion exits nonzero, and checks real CLI JSON,
+Markdown, exit codes and non-execution of project source. `./kujo test` routes to
+this gate when `KUJO_RUNTIME_BIN` is configured. Plain `kujo test` is a snapshot
+command and is not the native assertion gate. The continuous loop uses the same
+verified gate. No test fixtures are written into the checkout.
+
+## Private snapshot adapters
+
+`src.snapshot.validate_snapshot_references(directory)` is a preflight for hosts
+that have already copied bounded, admitted files into a private directory without
+symlinks. Call it before any native checks. It rejects manifest entry/name
+fallbacks and example input references that could leave that directory. It
+returns explicit issues and does not run checks or mutate source. Output
+locations and `/path/to/` placeholders are excluded consistently with the native
+example checker. A host must block inspection when issues are returned, account
+for omitted files, and retain the early/heuristic scope of Concord findings.
+This API does not sandbox the normal CLI or make arbitrary source directories
+safe to inspect.
 
 ## Contributor and Agent Notes
 
@@ -183,6 +204,7 @@ kujo                      # Repo-local wrapper; requires KUJO_RUNTIME_BIN
 src/
   common.kujo             # Shared utilities (arg parsing, string helpers)
   scanner.kujo            # Artifact discovery and file detection
+  snapshot.kujo           # Host-owned private snapshot reference admission
   checks/
     shared.kujo           # Shared bounded-artifact findings
     cli_docs.kujo         # CLI ↔ Docs alignment checks

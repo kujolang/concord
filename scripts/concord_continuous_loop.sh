@@ -207,7 +207,7 @@ run_cycle() {
 	local cycle_index="$1"
 	local ts run_dir scan_dir tasks_dir checks_dir records_file
 	local test_log gate_summary_file cycle_issue_drafts_file
-	local concord_test_status
+	local concord_test_status native_test_runtime
 	ts="$(date -u +"%Y%m%dT%H%M%SZ")"
 	run_dir="$(mktemp -d "$RUNS_DIR/${ts}-${cycle_index}.XXXXXX")"
 	scan_dir="$run_dir/scans"
@@ -222,7 +222,12 @@ run_cycle() {
 	: > "$records_file"
 
 	echo "[loop:$cycle_index] running concord tests"
-	if (cd "$REPO_ROOT" && "$KUJO_CMD" test > "$test_log" 2>&1); then
+	if [[ "$KUJO_CMD" == "$REPO_ROOT/kujo" ]]; then
+		native_test_runtime="${KUJO_RUNTIME_BIN:-}"
+	else
+		native_test_runtime="$(command -v "$KUJO_CMD")"
+	fi
+	if (cd "$REPO_ROOT" && KUJO_RUNTIME_BIN="$native_test_runtime" node scripts/verify-native.mjs > "$test_log" 2>&1); then
 		concord_test_status="pass"
 	else
 		concord_test_status="fail"

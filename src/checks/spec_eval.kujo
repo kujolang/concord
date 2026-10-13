@@ -73,8 +73,8 @@ export func check_spec_eval(dir_path) {
 	# Check 3: Spec acceptance criteria vs eval checks
 	mut has_spec := len(spec_files) > 0
 	mut has_eval := len(eval_files) > 0
-	if has_spec == 1 {
-		if has_eval == 1 {
+	if has_spec {
+		if has_eval {
 			mut s := 0
 			while s < len(spec_files) {
 				spec_content := read_file_safe(spec_files[s])
@@ -110,7 +110,7 @@ export func check_spec_eval(dir_path) {
 				e = e + 1
 			}
 
-			if has_criteria == 0 {
+			if !has_criteria {
 				findings = push(findings, {
 					"id": "spec-eval-no-criteria",
 					"severity": "medium",

@@ -104,7 +104,7 @@ export func check_manifest_docs(dir_path) {
 		# Compare name against README title
 		if manifest_name != "" {
 			# Check if README title contains the package name
-			mut readme_has_name := is_truthy(contains(to_lower(readme_content), to_lower(manifest_name))) == 1
+			mut readme_has_name := is_truthy(contains(to_lower(readme_content), to_lower(manifest_name)))
 			if readme_has_name == 0 {
 				findings = push(findings, {
 					"id": "manifest-docs-name-mismatch-" + to_string(m),
