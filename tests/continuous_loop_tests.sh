@@ -58,12 +58,13 @@ cat > "$test_root/bin/node" <<'FAKE_NODE'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${1:-}" == "scripts/verify-native.mjs" ]]
-[[ -n "${KUJO_RUNTIME_BIN:-}" ]]
+[[ "${KUJO_RUNTIME_BIN:-}" == "${EXPECTED_NATIVE_BIN:-}" ]]
 exit "${FAKE_NATIVE_STATUS:-0}"
 FAKE_NODE
 chmod +x "$test_root/bin/node"
 export PATH="$test_root/bin:$PATH"
-export KUJO_RUNTIME_BIN="$fake_kujo"
+export EXPECTED_NATIVE_BIN="$fake_kujo"
+export KUJO_RUNTIME_BIN="/unused-default-runtime"
 
 fixture_dir="$test_root/repo \"quoted\"|name"
 mkdir -p "$fixture_dir"
