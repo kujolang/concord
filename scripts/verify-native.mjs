@@ -25,8 +25,10 @@ for (const flags of modes) {
     const summary = JSON.parse(result.stdout.trim().split('\n').at(-1));
     assert.equal(summary.passed, 106, 'Every registered assertion must execute');
     assert.equal(summary.failed, 0);
-    const driver = await readFile(join(directory, 'native-tests.kujo'), 'utf8');
-    await writeFile(join(directory, 'negative-control.kujo'), driver.replace('\ntest_common()\n', '\ncheck(false, "runner negative control")\ntest_common()\n'));
+    const driver = (await readFile(join(directory, 'native-tests.kujo'), 'utf8')).replace(/\r\n/g, '\n');
+    const negativeDriver = driver.replace('\ntest_common()\n', '\ncheck(false, "runner negative control")\ntest_common()\n');
+    assert.notEqual(negativeDriver, driver, 'Negative-control assertion must be injected');
+    await writeFile(join(directory, 'negative-control.kujo'), negativeDriver);
     // Fresh fixture names let the negative control exercise the full suite again.
     for (const path of ['.concord-recursive-fixture', '.concord-worktree-fixture', '.concord-cli-docs-fixture', '.concord-nested-docs-fixture', '.concord-oversized-fixture', '.concord-examples-fixture', '.concord-metadata-fixture', '.concord-snapshot-fixture']) await rm(join(directory, path), { recursive: true, force: true });
     const negative = spawnSync(runtime, ['run', '--isolated-imports', ...flags, 'negative-control.kujo'], { cwd: directory, encoding: 'utf8', timeout: 60000, maxBuffer: 2_000_000 });
