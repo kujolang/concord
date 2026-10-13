@@ -144,7 +144,7 @@ export func artifact_exceeds_scan_limit(path) {
 	if is_truthy(file_exists(path)) == 0 { return 0 }
 	if is_truthy(path_is_dir(path)) == 1 { return 0 }
 	try {
-		return file_size(path) > scan_artifact_limit_bytes()
+		return is_truthy(file_size(path) > scan_artifact_limit_bytes())
 	} except err {
 		return 1
 	}
@@ -198,6 +198,19 @@ export func extract_version_from_text(text) {
 			return substring(value, 1, len(value))
 		}
 		return value
+	}
+	return ""
+}
+
+# Changelog version comes from a release heading, never an incidental dependency
+# version mentioned in an Unreleased note.
+export func extract_changelog_version(text) {
+	lines := split(text, "\n")
+	mut i := 0
+	while i < len(lines) {
+		matches := regex_find_all(trim_space(lines[i]), "^#{1,6}\\s+\\[?v?[0-9]+\\.[0-9]+\\.[0-9]+")
+		if len(matches) > 0 { return extract_version_from_text(matches[0]) }
+		i = i + 1
 	}
 	return ""
 }

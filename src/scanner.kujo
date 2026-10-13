@@ -32,9 +32,12 @@ func matches_any_extension(path, extensions) {
 
 func path_stays_within(root_abs, path) {
 	try {
-		candidate_abs := path_absolute(path)
-		if candidate_abs == root_abs { return 1 }
-		return is_truthy(starts_with(candidate_abs, root_abs + "/"))
+		candidate_abs := replace(path_absolute(path), "\\", "/")
+		root := replace(root_abs, "\\", "/")
+		if candidate_abs == root { return 1 }
+		mut prefix := root
+		if is_truthy(ends_with(prefix, "/")) == 0 { prefix = prefix + "/" }
+		return is_truthy(starts_with(candidate_abs, prefix))
 	} except err {
 		return 0
 	}
@@ -232,12 +235,10 @@ export func find_cli_entry(dir_path) {
 		manifest_path := manifests[m]
 		if is_truthy(file_exists(manifest_path)) == 1 {
 			content := read_file_safe(manifest_path)
-			mut matches := regex_find_all(content, "entry\\s*=\\s*\"([^\"]+)\"")
-			if len(matches) > 0 {
-				entry_path := join_path(dir_path, matches[0])
-				if is_truthy(file_exists(entry_path)) == 1 {
-					return entry_path
-				}
+			entry := extract_toml_field(content, "entry")
+			if entry != "" {
+				entry_path := join_path(dir_path, entry)
+				if is_truthy(file_exists(entry_path)) == 1 { return entry_path }
 			}
 		}
 		m = m + 1
@@ -247,12 +248,10 @@ export func find_cli_entry(dir_path) {
 	kennel_toml := join_path(dir_path, "kennel.toml")
 	if is_truthy(file_exists(kennel_toml)) == 1 {
 		content := read_file_safe(kennel_toml)
-		mut matches := regex_find_all(content, "name\\s*=\\s*\"([^\"]+)\"")
-		if len(matches) > 0 {
-			named_entry := join_path(dir_path, matches[0] + ".kujo")
-			if is_truthy(file_exists(named_entry)) == 1 {
-				return named_entry
-			}
+		name := extract_toml_field(content, "name")
+		if name != "" {
+			named_entry := join_path(dir_path, name + ".kujo")
+			if is_truthy(file_exists(named_entry)) == 1 { return named_entry }
 		}
 	}
 
@@ -501,7 +500,8 @@ export func get_cli_help_commands(entry_script, kujo_bin) {
 	mut matches := regex_find_all(content, "subcommand\\s*==\\s*\"([a-z][a-z0-9_-]+)\"")
 	mut i := 0
 	while i < len(matches) {
-		candidate := matches[i]
+		parts := split(matches[i], "\"")
+		candidate := parts[1]
 		mut is_excluded := 0
 		if candidate == "help" { is_excluded = 1 }
 		if candidate == "version" { is_excluded = 1 }

@@ -1,15 +1,18 @@
 # Concord test suite.
 #
-# The built-in `test_group` framework cannot see file-level imports on the
-# current runtime, so this hand-rolled harness is used instead. It exercises the
-# same exported helper functions and command-reporting surfaces the CLI uses.
+# This standalone harness executes every assertion through `run`, with an
+# explicit nonzero exit on failure. Use scripts/verify-native.mjs so fixtures
+# live in a fresh temporary checkout and cannot affect the source repository.
 
-from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text, sanitize_terminal_text, markdown_text, markdown_code, scan_artifact_limit_bytes, artifact_exceeds_scan_limit, read_file_safe
-from src.scanner import is_git_repo, is_kujo_project, find_readme, find_docs_files, discover_docs_files, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, command_has_token, option_reference_value
+from src.common import parse_flag, parse_subcommand, shift_args, severity_weight, highest_severity, trim_space, to_lowercase, verification_exit_code, scan_exit_code, concord_version, is_flag_token, is_truthy, extract_version_from_text, extract_changelog_version, sanitize_terminal_text, markdown_text, markdown_code, scan_artifact_limit_bytes, artifact_exceeds_scan_limit, read_file_safe
+from src.scanner import is_git_repo, is_kujo_project, find_readme, find_docs_files, discover_docs_files, find_eval_files, find_example_files, find_cli_entry, extract_fenced_commands, extract_badge_version, extract_yaml_field, extract_toml_field, extract_json_string_field, looks_like_command, command_invokes_entry, command_has_token, option_reference_value, get_cli_help_commands
 from src.checks.cli_docs import check_cli_docs
 from src.checks.example_validity import check_example_validity
+from src.checks.manifest_docs import check_manifest_docs
+from src.checks.spec_eval import check_spec_eval
 from src.reporter import generate_markdown_report, generate_json_report
 from src.fix_tasks import generate_fix_tasks
+from src.snapshot import snapshot_relative_reference, validate_snapshot_references
 
 mut passed := 0
 mut failed := 0
@@ -75,6 +78,9 @@ func test_common() {
 	check(to_lowercase("HELLO") == "hello", "to_lowercase works")
 	check(extract_version_from_text("## v2.3.4") == "2.3.4", "extract_version_from_text normalizes a v prefix")
 
+	check(extract_changelog_version("# Changes\n## Unreleased\n- Runtime 1.8.1\n## [1.0.0] - 2026-06-27\n") == "1.0.0", "changelog version ignores dependency mentions in unreleased notes")
+	check(extract_changelog_version("Use runtime 1.8.1\n") == "", "changelog extraction does not invent a release from prose")
+
 	mut escape_text := parse_json("\"\\u001b[31mwarning\"")
 	mut safe_terminal := sanitize_terminal_text(escape_text)
 	check(contains(safe_terminal, escape_text) == 0, "sanitize_terminal_text removes terminal escape bytes")
@@ -98,7 +104,7 @@ func test_scanner() {
 	check(len(example_files) > 0, "find_example_files finds examples directory")
 
 	mut cli_entry := find_cli_entry(".")
-	check(ends_with(cli_entry, "concord.kujo") == 1, "find_cli_entry finds manifest entrypoint")
+	check(ends_with(cli_entry, "concord.kujo"), "find_cli_entry finds manifest entrypoint")
 
 	mut text1 := "```bash\nkujo run concord.kujo scan\nkujo run concord.kujo help\n```"
 	mut cmds := extract_fenced_commands(text1)
@@ -150,7 +156,7 @@ func test_scanner() {
 	mut recursive_docs := find_docs_files(".concord-recursive-fixture")
 	mut recursive_examples := find_example_files(".concord-recursive-fixture")
 	check(len(recursive_docs) == 1, "find_docs_files recursively discovers nested documentation")
-	check(ends_with(recursive_docs[0], "docs/guides/cli.md") == 1, "find_docs_files preserves the nested documentation path")
+	check(ends_with(replace(recursive_docs[0], "\\", "/"), "docs/guides/cli.md"), "find_docs_files preserves the nested documentation path")
 	check(len(recursive_examples) == 1, "find_example_files recursively discovers nested examples")
 
 	create_dir(".concord-recursive-fixture/docs/a")
@@ -201,7 +207,7 @@ func test_checks() {
 	mut nested_mismatch_found := 0
 	mut nd := 0
 	while nd < len(nested_doc_findings) {
-		if starts_with(nested_doc_findings[nd]["id"], "cli-docs-mismatch-") == 1 && ends_with(nested_doc_findings[nd]["source_artifact"], "docs/guides/cli.md") == 1 {
+		if starts_with(nested_doc_findings[nd]["id"], "cli-docs-mismatch-") && ends_with(replace(nested_doc_findings[nd]["source_artifact"], "\\", "/"), "docs/guides/cli.md") {
 			nested_mismatch_found = 1
 		}
 		nd = nd + 1
@@ -239,6 +245,28 @@ func test_checks() {
 	}
 	check(missing_path_findings == 1, "example validity checks input paths but not output destinations")
 	check(missing_target == "missing.toml", "example validity extracts the missing input path")
+
+	create_dir(".concord-metadata-fixture")
+	create_dir(".concord-metadata-fixture/tests")
+	write_file(".concord-metadata-fixture/package.json", "{\"name\":\"expected-package\",\"version\":\"1.0.0\"}")
+	write_file(".concord-metadata-fixture/README.md", "# Unrelated title\n")
+	metadata_findings := check_manifest_docs(".concord-metadata-fixture")
+	mut has_name_mismatch := false
+	for item in metadata_findings { if starts_with(item["id"], "manifest-docs-name-mismatch-") { has_name_mismatch = true } }
+	check(has_name_mismatch, "manifest name mismatch is not lost to boolean/integer comparison")
+	write_file(".concord-metadata-fixture/task.spec.yml", "name: Task\ngoal: Review\n")
+	write_file(".concord-metadata-fixture/tests/suite.json", "{\"checks\":[]}")
+	alignment := check_spec_eval(".concord-metadata-fixture")
+	mut no_criteria := false
+	mut empty_eval := false
+	for item in alignment {
+		if item["id"] == "spec-eval-no-criteria" { no_criteria = true }
+		if starts_with(item["id"], "spec-eval-empty-eval-") { empty_eval = true }
+	}
+	check(no_criteria, "existing Spec without criteria is reported")
+	check(empty_eval, "existing Eval without named checks is reported")
+	commands := get_cli_help_commands(".concord-cli-docs-fixture/main.kujo", "unused")
+	check(len(commands) == 1 && commands[0] == "scan", "command extraction returns names rather than full regex matches")
 
 	mut clean := []
 	check(verification_exit_code(clean) == 0, "verification_exit_code returns zero for clean results")
@@ -284,11 +312,13 @@ func test_reporter() {
 	check(contains(report, "## Findings") == 1, "generate_markdown_report includes findings section")
 	check(contains(report, "Test finding") == 1, "generate_markdown_report includes finding title")
 	mut table_findings := findings
-	table_findings[0]["source_artifact"] = "left|right\nnext"
+	mut table_finding := table_findings[0]
+	table_finding["source_artifact"] = "left|right\nnext"
+	table_findings[0] = table_finding
 	mut table_report := generate_markdown_report(".", table_findings)
 	check(contains(table_report, "left\\|right\\\\u000anext") == 1, "generate_markdown_report escapes table cell content")
 	mut table_tasks := generate_fix_tasks(table_findings)
-	check(contains(table_tasks, "left\\|right\\\\u000anext") == 1, "generate_fix_tasks escapes table cell content")
+	check(contains(table_tasks, "<code>left|right\\u000anext</code>") == 1, "generate_fix_tasks escapes source-path control bytes inside code")
 
 	mut empty_findings := []
 	mut empty_report := generate_markdown_report(".", empty_findings)
@@ -298,6 +328,23 @@ func test_reporter() {
 	check(contains(json_str, "\"tool\"") == 1, "generate_json_report includes tool key")
 	check(contains(json_str, "\"concord\"") == 1, "generate_json_report includes tool name")
 	check(contains(json_str, "\"findings\"") == 1, "generate_json_report includes findings key")
+}
+
+func test_snapshot_admission() {
+	check(snapshot_relative_reference("src/cli.kujo"), "snapshot allows a project-relative entry")
+	check(!snapshot_relative_reference("../outside.kujo"), "snapshot rejects parent entry")
+	check(!snapshot_relative_reference("/absolute/file"), "snapshot rejects absolute references")
+	check(!snapshot_relative_reference("C:\\outside.kujo"), "snapshot rejects Windows absolute references")
+	check(!snapshot_relative_reference("src/.git/config"), "snapshot rejects Git internals")
+	check(!snapshot_relative_reference("src/line\nfile"), "snapshot rejects control bytes")
+	check(!snapshot_relative_reference("~/file"), "snapshot rejects home references")
+	check(len(validate_snapshot_references(".concord-cli-docs-fixture")) == 0, "snapshot admits ordinary canonical metadata and examples")
+	create_dir(".concord-snapshot-fixture")
+	write_file(".concord-snapshot-fixture/kennel.toml", "[package]\nname = \"../outside\"\n[kujo]\nentry = \"../outside.kujo\"\n")
+	write_file(".concord-snapshot-fixture/README.md", "```sh\nkujo run main.kujo --config ../outside.toml --file /absolute/input --output /absolute/output --dir /path/to/example\n```\n")
+	issues := validate_snapshot_references(".concord-snapshot-fixture")
+	check(len(issues) == 4, "snapshot rejects unsafe metadata and input references without probing them")
+	check(contains(to_json(issues), "../outside") == 0, "snapshot diagnostics do not retain raw external reference values")
 }
 
 func test_fix_tasks() {
@@ -326,26 +373,11 @@ func test_fix_tasks() {
 	check(contains(empty_tasks, "No fix tasks needed") == 1, "generate_fix_tasks handles empty")
 }
 
-test "Common utilities" {
-	test_common()
-}
-
-test "Scanner" {
-	test_scanner()
-}
-
-test "Checks" {
-	test_checks()
-}
-
-test "Reporter" {
-	test_reporter()
-}
-
-test "Fix Tasks" {
-	test_fix_tasks()
-}
-
-test "Summary" {
-	assert failed == 0
-}
+test_common()
+test_scanner()
+test_checks()
+test_reporter()
+test_fix_tasks()
+test_snapshot_admission()
+print(to_json({"passed": passed, "failed": failed}))
+if failed > 0 { exit(1) }
