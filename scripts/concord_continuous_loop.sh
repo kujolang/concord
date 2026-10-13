@@ -222,7 +222,7 @@ run_cycle() {
 	: > "$records_file"
 
 	echo "[loop:$cycle_index] running concord tests"
-	if (cd "$REPO_ROOT" && "$KUJO_CMD" test > "$test_log" 2>&1); then
+	if (cd "$REPO_ROOT" && KUJO_RUNTIME_BIN="${KUJO_RUNTIME_BIN:-$(command -v "$KUJO_CMD")}" node scripts/verify-native.mjs > "$test_log" 2>&1); then
 		concord_test_status="pass"
 	else
 		concord_test_status="fail"
