@@ -41,7 +41,7 @@ for (const flags of modes) {
     await writeFile(join(fixture, 'tool.kujo'), 'write_file("project-executed.txt", "unexpected execution")\nsubcommand := "scan"\nif subcommand == "scan" { print("ok") }\n');
     await writeFile(join(fixture, 'README.md'), '# fixture\n![Version](https://img.shields.io/badge/version-9.0.0-black)\n```sh\nkujo run tool.kujo scan\n```\n');
     function invoke(args, status) {
-      const result = spawnSync(runtime, ['run', '--isolated-imports', ...flags, 'concord.kujo', '--', ...args, '--dir', fixture], { cwd: directory, encoding: 'utf8', timeout: 60000, maxBuffer: 2_000_000 });
+      const result = spawnSync(runtime, ['run', '--isolated-imports', ...flags, 'concord.kujo', '--', ...args, ...(args[0] === 'version' ? [] : ['--dir', fixture])], { cwd: directory, encoding: 'utf8', timeout: 60000, maxBuffer: 2_000_000 });
       assert.ifError(result.error);
       assert.equal(result.status, status, `${args.join(' ')}: ${result.stderr} ${result.stdout}`);
       return result.stdout;
