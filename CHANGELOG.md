@@ -1,8 +1,12 @@
 # Changelog
 
+## [1.1.0] - 2026-10-14
+
+- Native VM/interpreter validation, bounded artifact discovery, accurate manifest/version/example checks, valid failing JSON output, and host snapshot preflight. Requires Kujo 1.8.1 or newer.
+
 All notable changes to Concord are documented here.
 
-## [Unreleased]
+### Included changes
 
 - Add a canonical reference preflight for host-owned private snapshots; reject escaping entry/name fallbacks and example inputs before native checks.
 - Normalize Windows separators when checking recursive discovery boundaries.
