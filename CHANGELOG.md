@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.1] - 2026-10-14
+
+- Derive the CLI version banner from the shared version source and verify it against package metadata in both runtime modes. The 1.1.0 package contained the updated capability code but retained the old CLI banner. Published 1.1.0 bytes remain unchanged.
+
 ## [1.1.0] - 2026-10-14
 
 - Native VM/interpreter validation, bounded artifact discovery, accurate manifest/version/example checks, valid failing JSON output, and host snapshot preflight. Requires Kujo 1.8.1 or newer.
