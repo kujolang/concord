@@ -46,6 +46,8 @@ for (const flags of modes) {
       assert.equal(result.status, status, `${args.join(' ')}: ${result.stderr} ${result.stdout}`);
       return result.stdout;
     }
+    const packageVersion = (await readFile(join(directory, 'kennel.toml'), 'utf8')).match(/^version = "([^"]+)"/m)[1];
+    assert.ok(invoke(['version'], 0).startsWith(`Concord v${packageVersion}\n`), 'CLI version must match the installed package');
     const scan = JSON.parse(invoke(['scan', '--format', 'json'], 1));
     assert.equal(scan.summary.highest_severity, 'high');
     assert.ok(scan.findings.some(item => item.id === 'version-inconsistency'));
